@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useCallback, memo } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Button, InputField, TextAreaField } from '@/components/form-components';
 import { AlertCircle, ChevronDown } from 'lucide-react';
 
 interface FormData {
   // Section 1: Student Profile
-  email: string;
   age: string;
   gender: string;
   yearLevel: string;
@@ -52,9 +51,26 @@ const FormSection = ({ children }: { children: React.ReactNode }) => (
   <div className="space-y-6">{children}</div>
 );
 
-const FormField = ({ label, children }: { label: string; children: React.ReactNode }) => (
+const FormField = ({
+  label,
+  required,
+  children,
+  fieldId,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+  fieldId?: string;
+}) => (
   <div className="space-y-3">
-    <label className="text-sm font-medium text-foreground block">{label}</label>
+    <label htmlFor={fieldId} className="text-sm font-medium text-foreground block">
+      {label}
+      {required && (
+        <span className="text-red-500 ml-1" aria-hidden="true">
+          *
+        </span>
+      )}
+    </label>
     {children}
   </div>
 );
@@ -67,7 +83,6 @@ interface ScreenTimeFormProps {
     brightness: number;
     sleepHours: number;
     notes: string;
-    email?: string;
     age?: string;
     gender?: string;
     yearLevel?: string;
@@ -80,6 +95,26 @@ interface ScreenTimeFormProps {
     blurryVisionFrequency?: string;
     dryEyesFrequency?: string;
   }) => Promise<void>;
+  defaultValues?: {
+    age?: string;
+    gender?: string;
+    yearLevel?: string;
+    fieldOfStudy?: string;
+    academicScreenTime?: string;
+    nonAcademicScreenTime?: string;
+    primaryDevice?: string;
+    eyeStrainFrequency?: string;
+    headachesFrequency?: string;
+    blurryVisionFrequency?: string;
+    dryEyesFrequency?: string;
+    exerciseFrequency?: string;
+    outdoorTime?: string;
+    blueLight?: string;
+    screenHeight?: string;
+    screenDistance?: string;
+    roomLighting?: string;
+    sleepHours?: string;
+  };
 }
 
 const AGE_OPTIONS = ['17-18', '19-20', '21-22', '23+', 'Other'];
@@ -163,31 +198,35 @@ const ROOM_LIGHTING_OPTIONS = [
   'Very bright (glare)',
 ];
 
-export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
+export function ScreenTimeForm({ onSubmit, defaultValues }: ScreenTimeFormProps) {
   const [currentSection, setCurrentSection] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Refs for auto-scrolling to the first invalid field
+  const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
+  const errorBannerRef = useRef<HTMLDivElement | null>(null);
+
   const [formData, setFormData] = useState<FormData>({
-    email: '',
-    age: '',
-    gender: '',
-    yearLevel: '',
-    fieldOfStudy: '',
-    academicScreenTime: '',
-    nonAcademicScreenTime: '',
-    primaryDevice: '',
-    eyeStrainFrequency: '',
-    headachesFrequency: '',
-    blurryVisionFrequency: '',
-    dryEyesFrequency: '',
-    exerciseFrequency: '',
-    outdoorTime: '',
-    blueLight: '',
-    screenHeight: '',
-    sleepHours: '',
-    screenBrightness: '',
-    screenDistance: '',
-    roomLighting: '',
+    age: defaultValues?.age || '',
+    gender: defaultValues?.gender || '',
+    yearLevel: defaultValues?.yearLevel || '',
+    fieldOfStudy: defaultValues?.fieldOfStudy || '',
+    academicScreenTime: defaultValues?.academicScreenTime || '',
+    nonAcademicScreenTime: defaultValues?.nonAcademicScreenTime || '',
+    primaryDevice: defaultValues?.primaryDevice || '',
+    eyeStrainFrequency: defaultValues?.eyeStrainFrequency || '',
+    headachesFrequency: defaultValues?.headachesFrequency || '',
+    blurryVisionFrequency: defaultValues?.blurryVisionFrequency || '',
+    dryEyesFrequency: defaultValues?.dryEyesFrequency || '',
+    exerciseFrequency: defaultValues?.exerciseFrequency || '',
+    outdoorTime: defaultValues?.outdoorTime || '',
+    blueLight: defaultValues?.blueLight || '',
+    screenHeight: defaultValues?.screenHeight || '',
+    sleepHours: defaultValues?.sleepHours || '',
+    screenBrightness: '0', // always starts fresh — brightness changes daily
+    screenDistance: defaultValues?.screenDistance || '',
+    roomLighting: defaultValues?.roomLighting || '',
     additionalNotes: '',
   });
 
@@ -199,142 +238,126 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
     setError('');
   }, []);
 
-  const selectOptions = useCallback((options: string[]) => {
-    return (
-      <div className="space-y-2">
-        {options.map((option) => (
-          <label
-            key={option}
-            className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted transition-colors cursor-pointer"
-          >
-            <input
-              type="radio"
-              name={`select-${option}`}
-              value={option}
-              checked={
-                Object.values(formData).some((v) => v === option)
-              }
-              onChange={() => {}}
-              className="w-4 h-4 accent-primary"
-            />
-            <span className="text-sm text-foreground">{option}</span>
-          </label>
-        ))}
-      </div>
-    );
-  }, [formData]);
-
-  const validateSection = (section: number) => {
+  // Returns the fieldId of the first invalid field, or null if section is valid
+  const validateSection = (section: number): string | null => {
     switch (section) {
       case 1:
-        if (!formData.email) {
-          setError('Email is required');
-          return false;
-        }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-          setError('Please enter a valid email address');
-          return false;
-        }
         if (!formData.age) {
           setError('Please select your age range');
-          return false;
+          return 'age';
         }
         if (!formData.gender) {
           setError('Please select your gender');
-          return false;
+          return 'gender';
         }
         if (!formData.yearLevel) {
           setError('Please select your year level');
-          return false;
+          return 'yearLevel';
         }
         if (!formData.fieldOfStudy) {
           setError('Please select your field of study');
-          return false;
+          return 'fieldOfStudy';
         }
-        return true;
+        return null;
       case 2:
         if (!formData.academicScreenTime) {
           setError('Please select your academic screen time');
-          return false;
+          return 'academicScreenTime';
         }
         if (!formData.nonAcademicScreenTime) {
           setError('Please select your non-academic screen time');
-          return false;
+          return 'nonAcademicScreenTime';
         }
         if (!formData.primaryDevice) {
           setError('Please select your primary device');
-          return false;
+          return 'primaryDevice';
         }
-        return true;
+        return null;
       case 3:
         if (!formData.eyeStrainFrequency) {
           setError('Please select eye strain frequency');
-          return false;
+          return 'eyeStrainFrequency';
         }
         if (!formData.headachesFrequency) {
           setError('Please select headaches frequency');
-          return false;
+          return 'headachesFrequency';
         }
         if (!formData.blurryVisionFrequency) {
           setError('Please select blurry vision frequency');
-          return false;
+          return 'blurryVisionFrequency';
         }
         if (!formData.dryEyesFrequency) {
           setError('Please select dry eyes frequency');
-          return false;
+          return 'dryEyesFrequency';
         }
-        return true;
+        return null;
       case 4:
         if (!formData.exerciseFrequency) {
           setError('Please select your exercise frequency');
-          return false;
+          return 'exerciseFrequency';
         }
         if (!formData.outdoorTime) {
           setError('Please select your outdoor time');
-          return false;
+          return 'outdoorTime';
         }
         if (!formData.blueLight) {
           setError('Please select your blue light filter usage');
-          return false;
+          return 'blueLight';
         }
-        return true;
+        return null;
       case 5:
         if (!formData.screenHeight) {
           setError('Please select your screen height position');
-          return false;
+          return 'screenHeight';
         }
         if (!formData.screenDistance) {
           setError('Please select your screen distance');
-          return false;
+          return 'screenDistance';
         }
         if (!formData.roomLighting) {
           setError('Please select your room lighting');
-          return false;
+          return 'roomLighting';
         }
-        return true;
+        return null;
       case 6:
         if (!formData.sleepHours) {
           setError('Please enter your sleep hours');
-          return false;
+          return 'sleepHours';
         }
         if (parseFloat(formData.sleepHours) < 0 || parseFloat(formData.sleepHours) > 24) {
           setError('Please enter sleep hours between 0 and 24');
-          return false;
+          return 'sleepHours';
         }
         if (!formData.screenBrightness) {
           setError('Please select your screen brightness');
-          return false;
+          return 'screenBrightness';
         }
-        return true;
+        return null;
       default:
-        return true;
+        return null;
+    }
+  };
+
+  const scrollToField = (fieldId: string) => {
+    const el = fieldRefs.current[fieldId];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Focus the element if it can receive focus
+      if (typeof (el as HTMLElement).focus === 'function') {
+        (el as HTMLElement).focus({ preventScroll: true });
+      }
+    } else if (errorBannerRef.current) {
+      errorBannerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
 
   const handleNext = () => {
-    if (validateSection(currentSection)) {
+    const invalidField = validateSection(currentSection);
+    if (invalidField === null) {
       setCurrentSection(currentSection + 1);
       setError('');
+    } else {
+      scrollToField(invalidField);
     }
   };
 
@@ -346,7 +369,9 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validateSection(currentSection)) {
+    const invalidField = validateSection(currentSection);
+    if (invalidField !== null) {
+      scrollToField(invalidField);
       return;
     }
 
@@ -391,13 +416,12 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
 
       const submitData = {
         screenTime: totalScreenTime,
-        breaksTaken: 0, // Can be added if form includes this
+        breaksTaken: 0,
         symptoms,
         brightness: parseInt(formData.screenBrightness) || 75,
         sleepHours: parseFloat(formData.sleepHours) || 0,
         notes: formData.additionalNotes,
         // Pass all profile and screen time data
-        email: formData.email,
         age: formData.age,
         gender: formData.gender,
         yearLevel: formData.yearLevel,
@@ -429,7 +453,10 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
       {error && (
-        <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex gap-3">
+        <div
+          ref={errorBannerRef}
+          className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex gap-3"
+        >
           <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <p>{error}</p>
         </div>
@@ -440,22 +467,10 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
         <FormSection>
           <SectionHeader number={1} title="STUDENT PROFILE" />
 
-          <FormField label="Email Address *">
-            <input
-              type="email"
-              value={formData.email || ''}
-              onChange={(e) => {
-                handleInputChange('email', e.target.value);
-              }}
-              placeholder="your.email@example.com"
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              required
-              autoComplete="off"
-            />
-          </FormField>
-
-          <FormField label="Age *">
+          <FormField label="Age" required fieldId="age">
             <select
+              id="age"
+              ref={(el) => { fieldRefs.current['age'] = el; }}
               value={formData.age || ''}
               onChange={(e) => handleInputChange('age', e.target.value)}
               className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
@@ -470,8 +485,10 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             </select>
           </FormField>
 
-          <FormField label="Gender *">
+          <FormField label="Gender" required fieldId="gender">
             <select
+              id="gender"
+              ref={(el) => { fieldRefs.current['gender'] = el; }}
               value={formData.gender || ''}
               onChange={(e) => handleInputChange('gender', e.target.value)}
               className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
@@ -486,8 +503,10 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             </select>
           </FormField>
 
-          <FormField label="Year Level *">
+          <FormField label="Year Level" required fieldId="yearLevel">
             <select
+              id="yearLevel"
+              ref={(el) => { fieldRefs.current['yearLevel'] = el; }}
               value={formData.yearLevel || ''}
               onChange={(e) => handleInputChange('yearLevel', e.target.value)}
               className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
@@ -502,8 +521,10 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             </select>
           </FormField>
 
-          <FormField label="Field of Study *">
+          <FormField label="Field of Study" required fieldId="fieldOfStudy">
             <select
+              id="fieldOfStudy"
+              ref={(el) => { fieldRefs.current['fieldOfStudy'] = el; }}
               value={formData.fieldOfStudy || ''}
               onChange={(e) => handleInputChange('fieldOfStudy', e.target.value)}
               className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
@@ -525,8 +546,12 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
         <FormSection>
           <SectionHeader number={2} title="DAILY SCREEN TIME" />
 
-          <FormField label="Average daily screen time for academic purposes *">
-            <div className="space-y-2">
+          <FormField label="Average daily screen time for academic purposes" required fieldId="academicScreenTime">
+            <div
+              id="academicScreenTime"
+              ref={(el) => { fieldRefs.current['academicScreenTime'] = el; }}
+              className="space-y-2"
+            >
               {ACADEMIC_SCREEN_TIME_OPTIONS.map((option) => (
                 <label
                   key={option}
@@ -546,8 +571,12 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             </div>
           </FormField>
 
-          <FormField label="Average daily screen time for non-academic purposes (social media, gaming, entertainment) *">
-            <div className="space-y-2">
+          <FormField label="Average daily screen time for non-academic purposes (social media, gaming, entertainment)" required fieldId="nonAcademicScreenTime">
+            <div
+              id="nonAcademicScreenTime"
+              ref={(el) => { fieldRefs.current['nonAcademicScreenTime'] = el; }}
+              className="space-y-2"
+            >
               {NON_ACADEMIC_SCREEN_TIME_OPTIONS.map((option) => (
                 <label
                   key={option}
@@ -567,8 +596,12 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             </div>
           </FormField>
 
-          <FormField label="Which device do you use the most for screen activities? *">
-            <div className="space-y-2">
+          <FormField label="Which device do you use the most for screen activities?" required fieldId="primaryDevice">
+            <div
+              id="primaryDevice"
+              ref={(el) => { fieldRefs.current['primaryDevice'] = el; }}
+              className="space-y-2"
+            >
               {PRIMARY_DEVICE_OPTIONS.map((option) => (
                 <label
                   key={option}
@@ -601,8 +634,10 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             </p>
           </div>
 
-          <FormField label="Eye Strain *">
+          <FormField label="Eye Strain" required fieldId="eyeStrainFrequency">
             <select
+              id="eyeStrainFrequency"
+              ref={(el) => { fieldRefs.current['eyeStrainFrequency'] = el; }}
               value={formData.eyeStrainFrequency}
               onChange={(e) => handleInputChange('eyeStrainFrequency', e.target.value)}
               className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
@@ -610,15 +645,15 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             >
               <option value="">Select frequency</option>
               {FREQUENCY_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
+                <option key={opt} value={opt}>{opt}</option>
               ))}
             </select>
           </FormField>
 
-          <FormField label="Headaches *">
+          <FormField label="Headaches" required fieldId="headachesFrequency">
             <select
+              id="headachesFrequency"
+              ref={(el) => { fieldRefs.current['headachesFrequency'] = el; }}
               value={formData.headachesFrequency}
               onChange={(e) => handleInputChange('headachesFrequency', e.target.value)}
               className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
@@ -626,15 +661,15 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             >
               <option value="">Select frequency</option>
               {FREQUENCY_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
+                <option key={opt} value={opt}>{opt}</option>
               ))}
             </select>
           </FormField>
 
-          <FormField label="Blurry Vision *">
+          <FormField label="Blurry Vision" required fieldId="blurryVisionFrequency">
             <select
+              id="blurryVisionFrequency"
+              ref={(el) => { fieldRefs.current['blurryVisionFrequency'] = el; }}
               value={formData.blurryVisionFrequency}
               onChange={(e) => handleInputChange('blurryVisionFrequency', e.target.value)}
               className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
@@ -642,15 +677,15 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             >
               <option value="">Select frequency</option>
               {FREQUENCY_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
+                <option key={opt} value={opt}>{opt}</option>
               ))}
             </select>
           </FormField>
 
-          <FormField label="Dry Eyes *">
+          <FormField label="Dry Eyes" required fieldId="dryEyesFrequency">
             <select
+              id="dryEyesFrequency"
+              ref={(el) => { fieldRefs.current['dryEyesFrequency'] = el; }}
               value={formData.dryEyesFrequency}
               onChange={(e) => handleInputChange('dryEyesFrequency', e.target.value)}
               className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
@@ -658,9 +693,7 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             >
               <option value="">Select frequency</option>
               {FREQUENCY_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
+                <option key={opt} value={opt}>{opt}</option>
               ))}
             </select>
           </FormField>
@@ -672,8 +705,10 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
         <FormSection>
           <SectionHeader number={4} title="LIFESTYLE & HABITS" />
 
-          <FormField label="How often do you exercise or engage in physical activity? *">
+          <FormField label="How often do you exercise or engage in physical activity?" required fieldId="exerciseFrequency">
             <select
+              id="exerciseFrequency"
+              ref={(el) => { fieldRefs.current['exerciseFrequency'] = el; }}
               value={formData.exerciseFrequency}
               onChange={(e) => handleInputChange('exerciseFrequency', e.target.value)}
               className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
@@ -681,15 +716,15 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             >
               <option value="">Select frequency</option>
               {EXERCISE_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
+                <option key={opt} value={opt}>{opt}</option>
               ))}
             </select>
           </FormField>
 
-          <FormField label="How much time do you spend outdoors daily? *">
+          <FormField label="How much time do you spend outdoors daily?" required fieldId="outdoorTime">
             <select
+              id="outdoorTime"
+              ref={(el) => { fieldRefs.current['outdoorTime'] = el; }}
               value={formData.outdoorTime}
               onChange={(e) => handleInputChange('outdoorTime', e.target.value)}
               className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
@@ -697,15 +732,15 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             >
               <option value="">Select duration</option>
               {OUTDOOR_TIME_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
+                <option key={opt} value={opt}>{opt}</option>
               ))}
             </select>
           </FormField>
 
-          <FormField label="Do you use blue light filters or night mode on your devices? *">
+          <FormField label="Do you use blue light filters or night mode on your devices?" required fieldId="blueLight">
             <select
+              id="blueLight"
+              ref={(el) => { fieldRefs.current['blueLight'] = el; }}
               value={formData.blueLight}
               onChange={(e) => handleInputChange('blueLight', e.target.value)}
               className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
@@ -713,9 +748,7 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             >
               <option value="">Select option</option>
               {BLUE_LIGHT_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
+                <option key={opt} value={opt}>{opt}</option>
               ))}
             </select>
           </FormField>
@@ -727,8 +760,10 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
         <FormSection>
           <SectionHeader number={5} title="ENVIRONMENT & SETTINGS" />
 
-          <FormField label="How is your screen positioned relative to your eyes? *">
+          <FormField label="How is your screen positioned relative to your eyes?" required fieldId="screenHeight">
             <select
+              id="screenHeight"
+              ref={(el) => { fieldRefs.current['screenHeight'] = el; }}
               value={formData.screenHeight}
               onChange={(e) => handleInputChange('screenHeight', e.target.value)}
               className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
@@ -736,15 +771,15 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             >
               <option value="">Select position</option>
               {SCREEN_HEIGHT_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
+                <option key={opt} value={opt}>{opt}</option>
               ))}
             </select>
           </FormField>
 
-          <FormField label="What is your typical screen viewing distance? *">
+          <FormField label="What is your typical screen viewing distance?" required fieldId="screenDistance">
             <select
+              id="screenDistance"
+              ref={(el) => { fieldRefs.current['screenDistance'] = el; }}
               value={formData.screenDistance}
               onChange={(e) => handleInputChange('screenDistance', e.target.value)}
               className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
@@ -752,15 +787,15 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             >
               <option value="">Select distance</option>
               {SCREEN_DISTANCE_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
+                <option key={opt} value={opt}>{opt}</option>
               ))}
             </select>
           </FormField>
 
-          <FormField label="What is the lighting condition of your room? *">
+          <FormField label="What is the lighting condition of your room?" required fieldId="roomLighting">
             <select
+              id="roomLighting"
+              ref={(el) => { fieldRefs.current['roomLighting'] = el; }}
               value={formData.roomLighting}
               onChange={(e) => handleInputChange('roomLighting', e.target.value)}
               className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
@@ -768,9 +803,7 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             >
               <option value="">Select lighting</option>
               {ROOM_LIGHTING_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
+                <option key={opt} value={opt}>{opt}</option>
               ))}
             </select>
           </FormField>
@@ -782,8 +815,10 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
         <FormSection>
           <SectionHeader number={6} title="ADDITIONAL INFORMATION" />
 
-          <FormField label="Average Sleep Hours per Night *">
+          <FormField label="Average Sleep Hours per Night" required fieldId="sleepHours">
             <input
+              id="sleepHours"
+              ref={(el) => { fieldRefs.current['sleepHours'] = el; }}
               type="number"
               inputMode="decimal"
               step="0.5"
@@ -800,9 +835,11 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             />
           </FormField>
 
-          <FormField label="Screen Brightness Level *">
+          <FormField label="Screen Brightness Level" required fieldId="screenBrightness">
             <div className="space-y-4">
               <input
+                id="screenBrightness"
+                ref={(el) => { fieldRefs.current['screenBrightness'] = el; }}
                 type="range"
                 min="0"
                 max="100"
@@ -824,7 +861,7 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             </div>
           </FormField>
 
-          <FormField label="Additional Notes or Comments">
+          <FormField label="Additional Notes or Comments" fieldId="additionalNotes">
             <textarea
               value={formData.additionalNotes || ''}
               onChange={(e) => {
@@ -882,7 +919,7 @@ export function ScreenTimeForm({ onSubmit }: ScreenTimeFormProps) {
             key={section}
             type="button"
             onClick={() => {
-              if (section < currentSection || validateSection(currentSection)) {
+              if (section < currentSection || validateSection(currentSection) === null) {
                 setCurrentSection(section);
               }
             }}

@@ -357,7 +357,7 @@ export default function DashboardPage() {
               />
 
               <MetricCard
-                title="Confidence"
+                title="Data Completeness"
                 value={prediction.confidence ? (prediction.confidence * 100).toFixed(0) : 'N/A'}
                 unit="%"
                 icon={<Eye className="w-6 h-6 text-secondary" />}

@@ -11,6 +11,28 @@ import { Button } from '@/components/form-components';
 
 const CONSENT_KEY = 'eyeguard_research_consent';
 
+interface PreviousLogData {
+  age?: string;
+  gender?: string;
+  yearLevel?: string;
+  fieldOfStudy?: string;
+  academicScreenTime?: string;
+  nonAcademicScreenTime?: string;
+  primaryDevice?: string;
+  eyeStrainFrequency?: string;
+  headachesFrequency?: string;
+  blurryVisionFrequency?: string;
+  dryEyesFrequency?: string;
+  exerciseFrequency?: string;
+  outdoorTime?: string;
+  blueLight?: string;
+  screenHeight?: string;
+  screenDistance?: string;
+  roomLighting?: string;
+  sleepHours?: string;
+  screenBrightness?: string;
+}
+
 export default function DailyLogPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -19,31 +41,85 @@ export default function DailyLogPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [alreadyLoggedToday, setAlreadyLoggedToday] = useState(false);
   const [checkingLog, setCheckingLog] = useState(true);
+  const [previousLog, setPreviousLog] = useState<PreviousLogData | null>(null);
   // null = loading, true = show modal, false = skip modal
   const [showConsent, setShowConsent] = useState<boolean | null>(null);
 
   useEffect(() => {
     // Check localStorage for consent preference
     const stored = localStorage.getItem(CONSENT_KEY);
-    // Show modal if user hasn't accepted yet (null or anything other than 'accepted')
     setShowConsent(stored !== 'accepted');
 
-    const checkTodayLog = async () => {
+    const loadUserData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
+
         const today = new Date().toISOString().split('T')[0];
-        const { data } = await supabase
-          .from('daily_logs')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('date', today)
-          .limit(1);
-        setAlreadyLoggedToday(!!(data && data.length > 0));
+
+        // Run both queries in parallel
+        const [todayCheck, profileResult, lastLogResult] = await Promise.all([
+          supabase
+            .from('daily_logs')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('date', today)
+            .limit(1),
+          supabase
+            .from('user_profiles')
+            .select('age, gender, year_level, field_of_study')
+            .eq('id', user.id)
+            .maybeSingle(),
+          supabase
+            .from('daily_logs')
+            .select(
+              'age, gender, year_level, field_of_study, ' +
+              'academic_screen_time, non_academic_screen_time, primary_device, ' +
+              'eye_strain_frequency, headaches_frequency, blurry_vision_frequency, dry_eyes_frequency, ' +
+              'exercise_frequency, outdoor_time, blue_light, screen_height, ' +
+              'screen_distance, room_lighting, sleep_hours, brightness'
+            )
+            .eq('user_id', user.id)
+            .order('date', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ]);
+
+        setAlreadyLoggedToday(!!(todayCheck.data && todayCheck.data.length > 0));
+
+        // Build prefill: profile fields take priority for stable data,
+        // daily fields come from the last log entry
+        const profile = profileResult.data;
+        const last = lastLogResult.data;
+
+        if (profile || last) {
+          setPreviousLog({
+            age: profile?.age || last?.age || '',
+            gender: profile?.gender || last?.gender || '',
+            yearLevel: profile?.year_level || last?.year_level || '',
+            fieldOfStudy: profile?.field_of_study || last?.field_of_study || '',
+            academicScreenTime: last?.academic_screen_time || '',
+            nonAcademicScreenTime: last?.non_academic_screen_time || '',
+            primaryDevice: last?.primary_device || '',
+            eyeStrainFrequency: last?.eye_strain_frequency || '',
+            headachesFrequency: last?.headaches_frequency || '',
+            blurryVisionFrequency: last?.blurry_vision_frequency || '',
+            dryEyesFrequency: last?.dry_eyes_frequency || '',
+            exerciseFrequency: last?.exercise_frequency || '',
+            outdoorTime: last?.outdoor_time || '',
+            blueLight: last?.blue_light || '',
+            screenHeight: last?.screen_height || '',
+            screenDistance: last?.screen_distance || '',
+            roomLighting: last?.room_lighting || '',
+            sleepHours: last?.sleep_hours != null ? String(last.sleep_hours) : '',
+            // Brightness is intentionally NOT prefilled — it changes daily
+          });
+        }
       } catch { /* non-fatal */ }
       finally { setCheckingLog(false); }
     };
-    checkTodayLog();
+
+    loadUserData();
   }, [supabase]);
 
   const handleConsent = () => {
@@ -52,8 +128,6 @@ export default function DailyLogPage() {
   };
 
   const handleDecline = () => {
-    // Just dismiss — don't redirect into a loop
-    // New users without data will stay on this page but can use the form
     setShowConsent(false);
   };
 
@@ -180,7 +254,13 @@ export default function DailyLogPage() {
           )}
 
           <div className="bg-card rounded-xl border border-border p-6">
-            <ScreenTimeForm onSubmit={handleFormSubmit} />
+            {checkingLog ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (
+              <ScreenTimeForm onSubmit={handleFormSubmit} defaultValues={previousLog ?? undefined} />
+            )}
           </div>
         </div>
       </MainLayout>
