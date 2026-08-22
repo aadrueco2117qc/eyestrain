@@ -5,91 +5,58 @@ import { selectRecommendations, type RecommendationInput } from '@/lib/recommend
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    
-    // Get authenticated user
+
     const {
       data: { user },
       error: userError,
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const formData = await request.json();
 
-    // Validate required fields
     const requiredFields = ['screenTime', 'symptoms', 'sleepHours', 'brightness'];
     for (const field of requiredFields) {
       if (!formData[field] && formData[field] !== 0) {
-        return NextResponse.json(
-          { error: `Missing required field: ${field}` },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: `Missing required field: ${field}` }, { status: 400 });
       }
     }
 
-    // Save or update user profile
+    // ── Profile upsert ────────────────────────────────────────────────────────
     try {
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .upsert({
-          id: user.id,
-          first_name: formData.firstName || '',
-          last_name: formData.lastName || '',
-          age: formData.age,
-          gender: formData.gender,
-          year_level: formData.yearLevel,
-          field_of_study: formData.fieldOfStudy,
-        }, { onConflict: 'id' });
+      await supabase.from('user_profiles').upsert({
+        id: user.id,
+        first_name: formData.firstName || '',
+        last_name:  formData.lastName  || '',
+        age:           formData.age,
+        gender:        formData.gender,
+        year_level:    formData.yearLevel,
+        field_of_study: formData.fieldOfStudy,
+      }, { onConflict: 'id' });
+    } catch { /* non-fatal */ }
 
-      if (profileError) {
-        console.warn('Warning: Could not save user profile:', profileError);
-        // Don't fail the entire request if profile save fails
-      }
-    } catch (profileErr) {
-      console.warn('Warning: Profile save error:', profileErr);
-    }
+    // ── Raw inputs ────────────────────────────────────────────────────────────
+    const screenTime  = parseFloat(formData.screenTime)  || 0;
+    const sleepHours  = parseFloat(formData.sleepHours)  || 7;
+    const brightness  = parseInt(formData.brightness)    || 70;
+    const symptoms    = formData.symptoms                 || [];
 
-    // -------------------------------------------------------------------------
-    // RISK CALCULATION — based on the Computer Vision Syndrome Questionnaire
-    // (CVS-Q) validated instrument by Seguí et al. (2015), J Clin Epidemiol,
-    // 68(6):662-73. DOI: 10.1016/j.jclinepi.2015.01.011
-    //
-    // Environmental modifiers are grounded in:
-    //   - AOA Digital Eye Strain Report (2016): ≥2h continuous screen use
-    //     associated with CVS onset; ≥6h/day considered high-exposure threshold
-    //   - National Sleep Foundation (2020): <7h sleep impairs blink reflex
-    //     and tear film stability, worsening dry eye and eye strain
-    //   - ISO 9241-303:2011 (Visual Display Ergonomics): screen luminance
-    //     40–80% of ambient light is the ergonomic optimal range
-    //   - AOA 20-20-20 Rule: regular breaks reduce accommodative fatigue
-    // -------------------------------------------------------------------------
+    // breaksTaken: try the dedicated field first, fall back to 0.
+    // The form sends this from the lifestyle section.
+    const breaksTaken = parseInt(formData.breaksTaken ?? formData.breaks_taken ?? '0') || 0;
 
-    const screenTime   = parseFloat(formData.screenTime)  || 0;
-    const sleepHours   = parseFloat(formData.sleepHours)  || 7;
-    const brightness   = parseInt(formData.brightness)    || 70;
-    const symptoms     = formData.symptoms                 || [];
-    const breaksTaken  = parseInt(formData.breaksTaken)   || 0;
+    // Lifestyle signals collected in sections 4–5 of the survey
+    const blueLight       = formData.blueLight       ?? '';   // 'Never'|'Sometimes'|'Regularly'|'Always'
+    const exerciseFreq    = formData.exerciseFrequency ?? ''; // 'None'|'Minimal'|'Moderate'|'Regular'
+    const outdoorTime     = formData.outdoorTime      ?? '';  // '<30min'|'30min–1h'|'1–2h'|'>2h'
 
-    // ------------------------------------------------------------------
-    // STEP 1 — CVS-Q Symptom Score (primary component, max raw = 12)
-    //
-    // CVS-Q assigns weighted severity to each symptom category:
-    //   Eye strain (asthenopia) : weight 2   — highest-weighted CVS symptom
-    //   Blurry vision           : weight 2   — high-weighted CVS symptom
-    //   Headaches               : weight 1   — moderate CVS symptom
-    //   Dry eyes                : weight 1   — moderate CVS symptom
-    //
-    // Frequency multiplier (0–2 scale per CVS-Q ordinal scoring):
-    //   Never = 0 | Rarely = 0.5 | Sometimes = 1 | Often = 1.5 | Always = 2
-    //
-    // Max possible raw score = (2+2+1+1) × 2 = 12
-    // CVS diagnosis threshold ≥ 6 (Seguí et al. 2015)
-    // ------------------------------------------------------------------
+    // ── STEP 1 — CVS-Q Symptom Score (primary, max raw = 12) ─────────────────
+    // Weighted per Seguí et al. 2015 (J Clin Epidemiol):
+    //   Eye strain + Blurry vision : weight 2 each (hallmark CVS symptoms)
+    //   Headaches  + Dry eyes      : weight 1 each (secondary symptoms)
+    // Frequency multiplier: Never=0 Rarely=0.5 Sometimes=1 Often=1.5 Always=2
     const freqMap: Record<string, number> = {
       'Never':                        0,
       'Rarely (1-2 times a week)':    0.5,
@@ -103,129 +70,145 @@ export async function POST(request: NextRequest) {
     const headachesFreq    = freqMap[formData.headachesFrequency    ?? ''] ?? (symptoms.includes('headaches')    ? 1.0 : 0);
     const dryEyesFreq      = freqMap[formData.dryEyesFrequency      ?? ''] ?? (symptoms.includes('dryEyes')      ? 1.0 : 0);
 
-    // CVS-Q weighted symptom score (max 12)
+    // CVS-Q raw score (0–12) → normalised 0–100
     const cvqRawScore =
-      (eyeStrainFreq    * 2) +  // weight 2
-      (blurryVisionFreq * 2) +  // weight 2
-      (headachesFreq    * 1) +  // weight 1
-      (dryEyesFreq      * 1);   // weight 1
-
-    // Normalise to 0–100 (dividing by max possible score of 12)
-    // This is the primary driver: CVS symptoms are the gold-standard
-    // diagnostic criterion (Seguí et al. 2015)
+      (eyeStrainFreq    * 2) +
+      (blurryVisionFreq * 2) +
+      (headachesFreq    * 1) +
+      (dryEyesFreq      * 1);
     const symptomScore = (cvqRawScore / 12) * 100;
 
-    // ------------------------------------------------------------------
-    // STEP 2 — Environmental Risk Modifiers
-    //
-    // These do not replace the symptom score; they scale it up or down
-    // based on clinically identified exposure factors. Combined modifier
-    // is capped at +30 / -10 to prevent symptoms being overshadowed.
-    // ------------------------------------------------------------------
-
-    // Screen time modifier (AOA 2016):
-    //   < 2h  → no added risk (below CVS onset threshold)
-    //   2–6h  → low–moderate exposure, linear scale 0→+10
-    //   > 6h  → high exposure, linear scale 10→+20 (max at 12h+)
+    // ── STEP 2 — Environmental exposure modifiers ─────────────────────────────
+    // Screen time (AOA 2016):
+    //   <2h   → 0      (below CVS onset threshold)
+    //   2–6h  → 0→+15  (linear; 6h already exceeds safe threshold)
+    //   >6h   → +15→+25 (diminishing returns — heavy users already symptomatic)
     let screenMod = 0;
     if (screenTime >= 2 && screenTime <= 6) {
-      screenMod = ((screenTime - 2) / 4) * 10;    // 0 to +10
+      screenMod = ((screenTime - 2) / 4) * 15;
     } else if (screenTime > 6) {
-      screenMod = 10 + (Math.min(screenTime - 6, 6) / 6) * 10; // +10 to +20
+      screenMod = 15 + (Math.min(screenTime - 6, 6) / 6) * 10;
     }
 
-    // Sleep modifier (NSF 2020):
-    //   7–9h optimal → 0 modifier
-    //   6–7h         → +5  (mild impairment of tear film stability)
-    //   5–6h         → +8
-    //   < 5h         → +10 (significant impairment)
-    //   > 9h         → +2  (slight over-sleep fatigue)
+    // Sleep (NSF 2020 + Sheppard & Wolffsohn 2018):
+    //   7–9h optimal → 0
+    //   6–7h         → +6
+    //   5–6h         → +10
+    //   <5h          → +14
+    //   >9h          → +2
     let sleepMod = 0;
-    if (sleepHours < 5)        sleepMod = 10;
-    else if (sleepHours < 6)   sleepMod = 8;
-    else if (sleepHours < 7)   sleepMod = 5;
-    else if (sleepHours <= 9)  sleepMod = 0;  // optimal
-    else                       sleepMod = 2;
+    if      (sleepHours < 5)        sleepMod = 14;
+    else if (sleepHours < 6)        sleepMod = 10;
+    else if (sleepHours < 7)        sleepMod = 6;
+    else if (sleepHours <= 9)       sleepMod = 0;
+    else                            sleepMod = 2;
 
-    // Brightness modifier (ISO 9241-303):
-    //   40–80% optimal range → 0 modifier
-    //   Outside range: each 10% deviation = +1 point, max +5
+    // Brightness (ISO 9241-303: optimal 40–80%):
+    //   each 10% outside range = +1.5, max +6
     let brightnessMod = 0;
     if (brightness < 40) {
-      brightnessMod = Math.min(((40 - brightness) / 10), 5);
+      brightnessMod = Math.min(((40 - brightness) / 10) * 1.5, 6);
     } else if (brightness > 80) {
-      brightnessMod = Math.min(((brightness - 80) / 10), 5);
+      brightnessMod = Math.min(((brightness - 80) / 10) * 1.5, 6);
     }
 
-    // Break modifier (AOA 20-20-20 rule):
-    //   Each break = –2 points, max –10 reduction
-    //   (breaks reduce accommodative fatigue)
-    const breakMod = -Math.min(breaksTaken * 2, 10);
+    // Break adherence (AOA 20-20-20):
+    //   Each break taken → –3 points, max –12
+    const breakMod = -Math.min(breaksTaken * 3, 12);
 
-    const totalModifier = screenMod + sleepMod + brightnessMod + breakMod;
+    // ── STEP 3 — Lifestyle bonus modifiers (protective factors) ───────────────
+    // Blue-light filter usage reduces photostress (Sheppard & Wolffsohn 2018)
+    const blueLightMod =
+      blueLight === 'Always'     ? -4 :
+      blueLight === 'Regularly'  ? -2 :
+      blueLight === 'Sometimes'  ? -1 : 0;
 
-    // ------------------------------------------------------------------
-    // STEP 3 — Final Risk Score
-    //
-    // Symptoms are primary (CVS-Q validated); environment modifies.
-    // If symptom score = 0 but environment is severe, a baseline
-    // exposure risk of up to 20% is still possible.
-    // ------------------------------------------------------------------
+    // Regular exercise improves ocular blood flow (Scheiman et al. 2011)
+    const exerciseMod =
+      exerciseFreq === 'Regular'   ? -3 :
+      exerciseFreq === 'Moderate'  ? -1.5 :
+      exerciseFreq === 'Minimal'   ? -0.5 : 0;
+
+    // Outdoor time — distance viewing rests accommodation (Huang et al. 2015)
+    const outdoorMod =
+      outdoorTime === '>2h'        ? -3 :
+      outdoorTime === '1–2h'       ? -2 :
+      outdoorTime === '30min–1h'   ? -1 : 0;
+
+    const totalModifier =
+      screenMod + sleepMod + brightnessMod + breakMod +
+      blueLightMod + exerciseMod + outdoorMod;
+
+    // ── STEP 4 — Final risk score ─────────────────────────────────────────────
+    // Primary path: symptoms drive the score; environment scales it.
+    // Exposure path: even with no symptoms, sustained exposure creates real risk
+    //   (capped at 35% — not a diagnosis, but a meaningful early-warning floor).
     let riskScore: number;
     if (symptomScore === 0) {
-      // No symptoms reported — risk is purely environmental exposure
-      riskScore = Math.max(0, Math.min(20, totalModifier));
+      riskScore = Math.max(0, Math.min(35, totalModifier));
     } else {
       riskScore = Math.max(0, Math.min(100, symptomScore + totalModifier));
     }
+    riskScore = parseFloat(riskScore.toFixed(1));
 
-    // ------------------------------------------------------------------
-    // STEP 4 — Risk Level Thresholds (aligned with CVS-Q)
-    //
-    // CVS-Q diagnosis threshold: raw score ≥ 6 out of 12 (50%)
-    //   < 25%  → Low       (below clinical significance)
-    //   25–49% → Moderate  (approaching CVS threshold)
-    //   50–74% → High      (meets CVS diagnosis criteria)
-    //   ≥ 75%  → Critical  (severe CVS, recommend clinical consultation)
-    // ------------------------------------------------------------------
+    // ── STEP 5 — Risk level thresholds ───────────────────────────────────────
+    // Aligned with CVS-Q clinical threshold (≥6/12 = 50% → High)
     let riskLevel = 0;
-    if      (riskScore < 25) riskLevel = 0;
-    else if (riskScore < 50) riskLevel = 1;
-    else if (riskScore < 75) riskLevel = 2;
-    else                     riskLevel = 3;
+    if      (riskScore < 25) riskLevel = 0; // Low
+    else if (riskScore < 50) riskLevel = 1; // Moderate
+    else if (riskScore < 75) riskLevel = 2; // High
+    else                     riskLevel = 3; // Critical
 
-    // Fatigue score (0–10): proportional to risk, represents
-    // visual fatigue severity consistent with CVS symptom burden
-    const fatigueScore = parseFloat(((riskScore / 100) * 10).toFixed(1));
+    // ── STEP 6 — Independent fatigue score (0–10) ─────────────────────────────
+    // Fatigue is driven by accommodation demand and blink-rate reduction,
+    // NOT purely by risk percentage. It weights:
+    //   • Symptom burden (primary — directly reflects visual fatigue)
+    //   • Screen time duration (accommodation load)
+    //   • Sleep deficit (recovery impairment)
+    //   • Break absence (no accommodative relief)
+    // Capped independently so a low-symptom user with extreme screen time
+    // can still show high fatigue while having moderate risk.
+    const symptomFatigue  = (cvqRawScore / 12) * 5;          // 0–5 pts from symptoms
+    const screenFatigue   = Math.min(screenTime / 3, 2.5);   // 0–2.5 pts (max at 7.5h)
+    const sleepFatigue    = sleepHours < 6 ? 1.5 : sleepHours < 7 ? 0.8 : 0;  // 0–1.5 pts
+    const breakFatigue    = breaksTaken === 0 ? 1.0 : breaksTaken === 1 ? 0.5 : 0; // 0–1 pt
+    const fatigueRaw      = symptomFatigue + screenFatigue + sleepFatigue + breakFatigue;
+    const fatigueScore    = parseFloat(Math.min(10, Math.max(0, fatigueRaw)).toFixed(1));
 
-    // ------------------------------------------------------------------
-    // STEP 5 — Confidence
-    //
-    // Confidence reflects data completeness, not a trained probability.
-    // Base: 0.65 (rule-based floor)
-    // +0.05 per symptom frequency answered (max 4 × 0.05 = +0.20)
-    // +0.05 if all environmental fields present
-    // Capped at 0.90 — a rule-based model cannot claim >90% confidence
-    // ------------------------------------------------------------------
+    // ── STEP 7 — Confidence ───────────────────────────────────────────────────
+    // Reflects both form completeness AND historical depth.
+    // More logged days = more reliable pattern recognition.
     const symptomFieldsAnswered = [
       formData.eyeStrainFrequency,
       formData.blurryVisionFrequency,
       formData.headachesFrequency,
       formData.dryEyesFrequency,
     ].filter(Boolean).length;
-
+    const lifestyleFieldsAnswered = [blueLight, exerciseFreq, outdoorTime].filter(Boolean).length;
     const envFieldsComplete = !!(formData.sleepHours && formData.brightness && formData.screenTime);
 
-    const confidence = Math.min(
-      0.90,
-      0.65 + (symptomFieldsAnswered * 0.05) + (envFieldsComplete ? 0.05 : 0)
-    );
+    // History depth bonus: fetch count of prior logs
+    let historyBonus = 0;
+    try {
+      const { count } = await supabase
+        .from('daily_logs')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+      if (count && count >= 14) historyBonus = 0.08;
+      else if (count && count >= 7)  historyBonus = 0.05;
+      else if (count && count >= 3)  historyBonus = 0.02;
+    } catch { /* non-fatal */ }
 
-    // Symptom count for recommendations engine (unchanged interface)
-    const symptomCount = [eyeStrainFreq, blurryVisionFreq, headachesFreq, dryEyesFreq]
-      .filter(f => f > 0).length;
+    const confidence = parseFloat(Math.min(
+      0.92,
+      0.55
+      + (symptomFieldsAnswered  * 0.06)   // max +0.24
+      + (lifestyleFieldsAnswered * 0.02)  // max +0.06
+      + (envFieldsComplete ? 0.04 : 0)
+      + historyBonus
+    ).toFixed(3));
 
-    // Generate personalized recommendations using the dynamic recommendation engine
+    // ── Recommendations ───────────────────────────────────────────────────────
     const recInput: RecommendationInput = {
       screenTime,
       sleepHours,
@@ -238,64 +221,57 @@ export async function POST(request: NextRequest) {
     };
     const recommendations = await selectRecommendations(recInput);
 
-    // Save daily log to Supabase (use upsert to handle updates)
+    // ── Save daily log ────────────────────────────────────────────────────────
     const today = new Date().toISOString().split('T')[0];
-    
+
     const { data: dailyLog, error: logError } = await supabase
       .from('daily_logs')
       .upsert({
-        user_id: user.id,
-        date: today,
-        email: user.email,
-        age: formData.age,
-        gender: formData.gender,
-        year_level: formData.yearLevel,
+        user_id:   user.id,
+        date:      today,
+        email:     user.email,
+        age:           formData.age,
+        gender:        formData.gender,
+        year_level:    formData.yearLevel,
         field_of_study: formData.fieldOfStudy,
-        academic_screen_time: formData.academicScreenTime,
+        academic_screen_time:     formData.academicScreenTime,
         non_academic_screen_time: formData.nonAcademicScreenTime,
-        screen_time: screenTime,
-        breaks_taken: formData.breaksTaken || 0,
+        screen_time:   screenTime,
+        breaks_taken:  breaksTaken,
         primary_device: formData.primaryDevice,
-        eye_strain: eyeStrainFreq > 0 ? 1 : 0,
+        eye_strain:           eyeStrainFreq    > 0 ? 1 : 0,
         eye_strain_frequency: formData.eyeStrainFrequency,
-        headaches: headachesFreq > 0 ? 1 : 0,
-        headaches_frequency: formData.headachesFrequency,
-        blurry_vision: blurryVisionFreq > 0 ? 1 : 0,
+        headaches:            headachesFreq    > 0 ? 1 : 0,
+        headaches_frequency:  formData.headachesFrequency,
+        blurry_vision:           blurryVisionFreq > 0 ? 1 : 0,
         blurry_vision_frequency: formData.blurryVisionFrequency,
-        dry_eyes: dryEyesFreq > 0 ? 1 : 0,
+        dry_eyes:           dryEyesFreq  > 0 ? 1 : 0,
         dry_eyes_frequency: formData.dryEyesFrequency,
-        brightness: brightness,
+        brightness:  brightness,
         sleep_hours: sleepHours,
-        notes: formData.notes,
-        risk_level: ['Low', 'Moderate', 'High', 'Critical'][riskLevel],
+        notes:       formData.notes,
+        risk_level:  ['Low', 'Moderate', 'High', 'Critical'][riskLevel],
       }, { onConflict: 'user_id,date' })
       .select()
       .single();
 
     if (logError) {
       console.error('Error saving daily log:', logError);
-      return NextResponse.json(
-        { error: 'Failed to save daily log' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to save daily log' }, { status: 500 });
     }
 
-    // Delete old predictions for this daily log (if updating)
-    await supabase
-      .from('predictions')
-      .delete()
-      .eq('daily_log_id', dailyLog.id);
+    // Delete old prediction for this log before inserting fresh one
+    await supabase.from('predictions').delete().eq('daily_log_id', dailyLog.id);
 
-    // Save new prediction to Supabase
     const { data: prediction, error: predictionError } = await supabase
       .from('predictions')
       .insert({
-        user_id: user.id,
-        daily_log_id: dailyLog.id,
-        risk_level: riskLevel,
+        user_id:        user.id,
+        daily_log_id:   dailyLog.id,
+        risk_level:     riskLevel,
         risk_percentage: riskScore,
-        fatigue_score: fatigueScore,
-        confidence: confidence,
+        fatigue_score:  fatigueScore,
+        confidence:     confidence,
         recommendations: recommendations,
       })
       .select()
@@ -303,34 +279,38 @@ export async function POST(request: NextRequest) {
 
     if (predictionError) {
       console.error('Error saving prediction:', predictionError);
-      return NextResponse.json(
-        { error: 'Failed to save prediction' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to save prediction' }, { status: 500 });
     }
 
-    // Fire-and-forget: notify Flask backend that a new log was saved
-    // so it can auto-retrain when the threshold is reached.
-    const flaskUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
-    fetch(`${flaskUrl}/api/ml/notify-new-log`, { method: 'POST' }).catch(() => {
-      // Ignore errors — Flask backend may not be running
-    });
+    // Fire-and-forget Flask retrain notification
+    const flaskBase = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
+    fetch(`${flaskBase}/api/ml/notify-new-log`, { method: 'POST' }).catch(() => {});
 
     return NextResponse.json({
-      success: true,
-      daily_log_id: dailyLog.id,
-      prediction_id: prediction.id,
-      risk_level: riskLevel,
-      risk_percentage: riskScore,
-      fatigue_score: fatigueScore,
-      confidence: confidence,
-      recommendations: recommendations,
+      success:          true,
+      daily_log_id:     dailyLog.id,
+      prediction_id:    prediction.id,
+      risk_level:       riskLevel,
+      risk_percentage:  riskScore,
+      fatigue_score:    fatigueScore,
+      confidence:       confidence,
+      recommendations:  recommendations,
+      // Expose component scores so the page can display them without recalculating
+      score_breakdown: {
+        symptomScore:    parseFloat(symptomScore.toFixed(1)),
+        screenMod:       parseFloat(screenMod.toFixed(1)),
+        sleepMod:        parseFloat(sleepMod.toFixed(1)),
+        brightnessMod:   parseFloat(brightnessMod.toFixed(1)),
+        breakMod:        parseFloat(breakMod.toFixed(1)),
+        blueLightMod:    parseFloat(blueLightMod.toFixed(1)),
+        exerciseMod:     parseFloat(exerciseMod.toFixed(1)),
+        outdoorMod:      parseFloat(outdoorMod.toFixed(1)),
+        totalModifier:   parseFloat(totalModifier.toFixed(1)),
+        cvqRawScore:     parseFloat(cvqRawScore.toFixed(2)),
+      },
     });
   } catch (error) {
     console.error('API error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

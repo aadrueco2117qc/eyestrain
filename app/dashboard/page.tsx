@@ -317,7 +317,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Risk Prediction Section */}
-        {prediction && (
+        {prediction ? (
           <div className="space-y-6">
             {/* Risk Level and Key Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
@@ -536,6 +536,28 @@ export default function DashboardPage() {
                 }
               />
             </div>
+          </div>
+        ) : (
+          /* ── Zero-prediction state: logs exist but no prediction row yet ── */
+          <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 p-10 text-center space-y-4">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mx-auto">
+              <AlertCircle className="w-7 h-7 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">No prediction yet</h3>
+              <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
+                Your log was saved but a risk score hasn't been generated. Submit today's log to get your first prediction.
+              </p>
+            </div>
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={() => router.push('/daily-log')}
+              className="inline-flex items-center gap-2"
+            >
+              <Clock className="w-4 h-4" />
+              Log Today's Data
+            </Button>
           </div>
         )}
       </div>

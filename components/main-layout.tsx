@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Sidebar } from './sidebar';
+import { MobileNav } from './mobile-nav';
 import { Menu } from 'lucide-react';
 import { AiChat } from './ai-chat';
 
@@ -37,13 +38,16 @@ export function MainLayout({ children }: MainLayoutProps) {
           </button>
         </div>
 
-        {/* Main content */}
+        {/* Main content — extra bottom padding on mobile so content clears the bottom nav */}
         <div className="flex-1 overflow-auto">
-          <div className="p-4 md:p-8">
+          <div className="p-4 pb-24 md:p-8 md:pb-8">
             {children}
           </div>
         </div>
       </main>
+
+      {/* Mobile bottom navigation bar */}
+      <MobileNav />
 
       {/* Global floating AI chat bubble — visible on all pages */}
       <AiChat mode="bubble" />

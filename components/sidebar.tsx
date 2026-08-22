@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Sun,
   Moon,
+  FlaskConical,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { isAdmin } from '@/lib/admin-guard';
@@ -55,6 +56,12 @@ const navItems: NavItem[] = [
     label: 'Trends',
     href: '/trends',
     icon: <TrendingUp className="w-5 h-5" />,
+    category: 'main',
+  },
+  {
+    label: 'Factor Analysis',
+    href: '/factor-analysis',
+    icon: <FlaskConical className="w-5 h-5" />,
     category: 'main',
   },
   {
@@ -164,10 +171,11 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
+                  onClick={onClose}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors border-l-2 ${
                     isActive
-                      ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                      : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
+                      ? 'bg-sidebar-accent text-sidebar-accent-foreground border-l-sidebar-primary'
+                      : 'text-sidebar-foreground hover:bg-sidebar-accent/50 border-l-transparent'
                   }`}
                 >
                   {item.icon}
@@ -189,10 +197,11 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
+                  onClick={onClose}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors border-l-2 ${
                     isActive
-                      ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                      : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
+                      ? 'bg-sidebar-accent text-sidebar-accent-foreground border-l-sidebar-primary'
+                      : 'text-sidebar-foreground hover:bg-sidebar-accent/50 border-l-transparent'
                   }`}
                 >
                   {item.icon}

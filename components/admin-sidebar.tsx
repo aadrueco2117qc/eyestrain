@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Eye,
   LogOut,
+  TrendingUp,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -43,6 +44,12 @@ const menuItems = [
     href: '/admin/analytics',
     icon: BarChart3,
     description: 'System analytics',
+  },
+  {
+    label: 'Improvement Tracking',
+    href: '/admin/improvement',
+    icon: TrendingUp,
+    description: 'User health progress',
   },
   {
     label: 'Audit History',
