@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Eye, Check } from 'lucide-react';
+import { Eye, Check, CheckCircle2 } from 'lucide-react';
 import { InputField, SelectField, Button } from '@/components/form-components';
 import { createClient } from '@/lib/supabase/client';
 
@@ -25,6 +25,7 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [signupError, setSignupError] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -92,8 +93,9 @@ export default function SignupPage() {
           });
 
           if (signUpError) throw signUpError;
-          // Redirect to dashboard on successful signup
-          router.push('/dashboard');
+          // Show check-your-email screen — don't push to dashboard
+          // because Supabase email confirmation must be completed first
+          setEmailSent(true);
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Signup failed. Please try again.';
           setSignupError(errorMessage);
@@ -109,7 +111,31 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted flex flex-col md:flex-row">
-      {/* Left Side - Branding */}
+      {/* Email-sent confirmation screen */}
+      {emailSent && (
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="text-center space-y-6 max-w-md w-full">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 mx-auto">
+              <CheckCircle2 className="w-8 h-8 text-green-600 dark:text-green-400" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold text-foreground">Check your email</h2>
+              <p className="text-muted-foreground text-sm">
+                We've sent a confirmation link to{' '}
+                <strong className="text-foreground">{formData.email}</strong>.
+                Click the link in the email to activate your account.
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Didn't receive it? Check your spam folder. Already confirmed?{' '}
+              <Link href="/login" className="text-primary hover:underline">Sign in</Link>
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Sign-up form (hidden after email sent) */}
+      {!emailSent && (
       <div className="hidden md:flex md:w-1/2 bg-primary/5 border-r border-border flex items-center justify-center p-8">
         <div className="text-center space-y-6 max-w-md">
           <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto">
@@ -300,6 +326,7 @@ export default function SignupPage() {
           </p>
         </div>
       </div>
+      )}
     </div>
   );
 }

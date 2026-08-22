@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Save, Eye, LogOut, KeyRound, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Save, Eye, LogOut, KeyRound, EyeOff, CheckCircle2, AlertCircle, Bell } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { MainLayout } from '@/components/main-layout';
 import { AuthGuard } from '@/components/auth-guard';
@@ -65,6 +65,15 @@ export default function SettingsPage() {
   const [message, setMessage] = useState('');
   const [consentEnabled, setConsentEnabled] = useState(true);
 
+  // Notification settings state
+  const [notifSettings, setNotifSettings] = useState({
+    enable_email_notifications: true,
+    enable_daily_reminders: true,
+    reminder_time: '09:00',
+  });
+  const [isSavingNotif, setIsSavingNotif] = useState(false);
+  const [notifMessage, setNotifMessage] = useState('');
+
   useEffect(() => {
     const loadUserData = async () => {
       try {
@@ -93,6 +102,21 @@ export default function SettingsPage() {
             yearLevel: profile.year_level || '',
             fieldOfStudy: profile.field_of_study || '',
           }));
+        }
+
+        // Load notification settings
+        const { data: userSettings } = await supabase
+          .from('user_settings')
+          .select('enable_email_notifications, enable_daily_reminders, reminder_time')
+          .eq('user_id', authUser.id)
+          .maybeSingle();
+
+        if (userSettings) {
+          setNotifSettings({
+            enable_email_notifications: userSettings.enable_email_notifications ?? true,
+            enable_daily_reminders:     userSettings.enable_daily_reminders     ?? true,
+            reminder_time:              (userSettings.reminder_time ?? '09:00:00').slice(0, 5),
+          });
         }
       } catch (err) {
         console.error('Error loading user data:', err);
@@ -167,6 +191,34 @@ export default function SettingsPage() {
       setPasswordMessage('Failed to change password. Please try again.');
     } finally {
       setIsChangingPassword(false);
+    }
+  };
+
+  const handleSaveNotifications = async () => {
+    if (!user) return;
+    setIsSavingNotif(true);
+    setNotifMessage('');
+    try {
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert({
+          user_id: user.id,
+          enable_email_notifications: notifSettings.enable_email_notifications,
+          enable_daily_reminders:     notifSettings.enable_daily_reminders,
+          reminder_time:              notifSettings.reminder_time + ':00',
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+
+      if (error) {
+        setNotifMessage(`Error: ${error.message}`);
+      } else {
+        setNotifMessage('Notification settings saved!');
+        setTimeout(() => setNotifMessage(''), 5000);
+      }
+    } catch {
+      setNotifMessage('Failed to save. Please try again.');
+    } finally {
+      setIsSavingNotif(false);
     }
   };
 
@@ -366,6 +418,101 @@ export default function SettingsPage() {
                   <KeyRound className="w-4 h-4" />
                 )}
                 {isChangingPassword ? 'Updating…' : 'Update Password'}
+              </button>
+            </div>
+          </Section>
+
+          {/* ── Notifications ── */}
+          <Section
+            title="Notifications"
+            description="Control when and how EyeGuard alerts you about your eye health"
+          >
+            <div className="space-y-5">
+              <StatusBanner message={notifMessage} />
+
+              {/* Email notifications toggle */}
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Email Notifications</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Receive high-risk alerts and reminders via email
+                  </p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={notifSettings.enable_email_notifications}
+                  onClick={() => setNotifSettings(prev => ({ ...prev, enable_email_notifications: !prev.enable_email_notifications }))}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                    notifSettings.enable_email_notifications ? 'bg-primary' : 'bg-muted'
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    notifSettings.enable_email_notifications ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
+              </div>
+
+              {/* Daily reminder toggle */}
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Daily Log Reminders</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Get a reminder email if you haven't logged today
+                  </p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={notifSettings.enable_daily_reminders}
+                  onClick={() => setNotifSettings(prev => ({ ...prev, enable_daily_reminders: !prev.enable_daily_reminders }))}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                    notifSettings.enable_daily_reminders ? 'bg-primary' : 'bg-muted'
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    notifSettings.enable_daily_reminders ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
+              </div>
+
+              {/* Reminder time picker — only shown when daily reminders are on */}
+              {notifSettings.enable_daily_reminders && (
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-foreground">
+                    Reminder Time
+                  </label>
+                  <input
+                    type="time"
+                    value={notifSettings.reminder_time}
+                    onChange={e => setNotifSettings(prev => ({ ...prev, reminder_time: e.target.value }))}
+                    className="w-40 px-3 py-2.5 border border-border rounded-xl bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    You'll receive a reminder at this time if you haven't logged yet
+                  </p>
+                </div>
+              )}
+
+              {/* High-risk alert note */}
+              <div className="flex items-start gap-3 p-3 rounded-xl bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800">
+                <Bell className="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-orange-800 dark:text-orange-200">
+                  <strong>High-risk alerts</strong> appear automatically on your dashboard and as an in-app notification whenever your risk score reaches High or Critical — regardless of these settings.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-5 border-t border-border flex justify-end">
+              <button
+                onClick={handleSaveNotifications}
+                disabled={isSavingNotif}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground text-sm font-medium rounded-xl hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              >
+                {isSavingNotif ? (
+                  <span className="w-4 h-4 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                {isSavingNotif ? 'Saving…' : 'Save Notifications'}
               </button>
             </div>
           </Section>

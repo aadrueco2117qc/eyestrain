@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle2, CalendarCheck, ArrowRight, LayoutDashboard } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { MainLayout } from '@/components/main-layout';
 import { AuthGuard } from '@/components/auth-guard';
 import { ScreenTimeForm } from '@/components/screen-time-form';
@@ -69,7 +70,7 @@ export default function DailyLogPage() {
           supabase
             .from('user_profiles')
             .select('age, gender, year_level, field_of_study')
-            .eq('id', user.id)
+            .eq('user_id', user.id)
             .maybeSingle(),
           supabase
             .from('daily_logs')
@@ -147,11 +148,34 @@ export default function DailyLogPage() {
         throw new Error(errorData.error || 'Failed to save daily log');
       }
       const result = await response.json();
+      const riskLevelLabel = result.risk_level !== undefined
+        ? (['Low', 'Moderate', 'High', 'Critical'][result.risk_level] ?? String(result.risk_level))
+        : undefined;
+
+      // Fire toast notification for High or Critical risk
+      if (result.risk_level === 2) {
+        toast.warning('High Eye Strain Risk Detected', {
+          description: `Your risk score is ${result.risk_percentage?.toFixed(1)}%. Take a break and follow the recommendations.`,
+          duration: 8000,
+          action: {
+            label: 'View Details',
+            onClick: () => router.push('/risk-prediction'),
+          },
+        });
+      } else if (result.risk_level === 3) {
+        toast.error('Critical Eye Strain Risk!', {
+          description: `Your risk score is ${result.risk_percentage?.toFixed(1)}%. Please rest your eyes and reduce screen time immediately.`,
+          duration: 12000,
+          action: {
+            label: 'View Details',
+            onClick: () => router.push('/risk-prediction'),
+          },
+        });
+      }
+
       setSuccessData({
         riskPercentage: result.risk_percentage,
-        riskLevel: result.risk_level !== undefined
-          ? (['Low', 'Moderate', 'High', 'Critical'][result.risk_level] ?? result.risk_level)
-          : undefined,
+        riskLevel: riskLevelLabel,
         fatigueScore: result.fatigue_score,
       });
       setSuccess(true);

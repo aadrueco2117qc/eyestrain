@@ -196,3 +196,98 @@ export async function PATCH(
 
   return NextResponse.json({ success: true })
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ userId: string }> },
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!isAdmin(user)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  let adminClient
+  try {
+    adminClient = createAdminClient()
+  } catch {
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+  }
+
+  const { userId } = await params
+
+  // Only registered users (UUID) can be fully deleted through auth
+  if (!uuidRegex.test(userId)) {
+    return NextResponse.json(
+      { error: 'Account deletion is only supported for registered users' },
+      { status: 400 },
+    )
+  }
+
+  // Snapshot profile for the audit trail before wiping anything
+  let snapshotEmail: string | null = null
+  let snapshotName: string | null = null
+  try {
+    const { data: authUser } = await adminClient.auth.admin.getUserById(userId)
+    snapshotEmail = authUser?.user?.email ?? null
+
+    const { data: profile } = await adminClient
+      .from('user_profiles')
+      .select('first_name, last_name')
+      .eq('user_id', userId)
+      .single()
+    if (profile) {
+      snapshotName = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || null
+    }
+  } catch { /* non-fatal — proceed with deletion */ }
+
+  // Delete predictions first (FK → daily_logs)
+  const { error: predErr } = await adminClient
+    .from('predictions')
+    .delete()
+    .eq('user_id', userId)
+  if (predErr) {
+    console.error('Failed to delete predictions:', predErr)
+    return NextResponse.json({ error: 'Failed to delete user predictions' }, { status: 500 })
+  }
+
+  // Delete daily logs
+  const { error: logsErr } = await adminClient
+    .from('daily_logs')
+    .delete()
+    .eq('user_id', userId)
+  if (logsErr) {
+    console.error('Failed to delete daily logs:', logsErr)
+    return NextResponse.json({ error: 'Failed to delete user logs' }, { status: 500 })
+  }
+
+  // Delete user_profiles (if exists)
+  await adminClient.from('user_profiles').delete().eq('user_id', userId)
+
+  // Delete user_settings (if exists)
+  await adminClient.from('user_settings').delete().eq('user_id', userId)
+
+  // Delete the auth account — this is irreversible
+  const { error: authErr } = await adminClient.auth.admin.deleteUser(userId)
+  if (authErr) {
+    console.error('Failed to delete auth user:', authErr)
+    return NextResponse.json({ error: 'Failed to delete user account' }, { status: 500 })
+  }
+
+  // Record audit event
+  try {
+    await recordAdminAuditEvent({
+      targetUserId: userId,
+      targetEmail: snapshotEmail,
+      eventType: 'user_deleted',
+      description: `Admin deleted user account for ${snapshotName ?? snapshotEmail ?? userId}`,
+      eventData: { deletedUserId: userId, email: snapshotEmail, name: snapshotName },
+      actorId: user?.id ?? null,
+      actorEmail: user?.email ?? null,
+    })
+  } catch (auditError) {
+    console.error('Audit logging failed:', auditError)
+  }
+
+  return NextResponse.json({ success: true })
+}
