@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import React, { useState, useEffect } from 'react';
-import { Eye, AlertCircle, TrendingUp, Clock, RefreshCw, LogOut, Flame } from 'lucide-react';
+import { Eye, AlertCircle, TrendingUp, Clock, RefreshCw, LogOut, Flame, AlertTriangle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { MainLayout } from '@/components/main-layout';
 import { MetricCard } from '@/components/dashboard-card';
@@ -171,7 +171,7 @@ export default function DashboardPage() {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
+      await supabase?.auth.signOut();
       router.push('/login');
     } catch (err) {
       console.error('Logout failed:', err);
@@ -277,6 +277,41 @@ export default function DashboardPage() {
   return (
     <MainLayout>
       <div className="space-y-8">
+
+        {/* ── High / Critical risk persistent alert banner ──────────────── */}
+        {prediction && (prediction.risk_level === 2 || prediction.risk_level === 3) && (() => {
+          const isCritical = prediction.risk_level === 3;
+          return (
+            <div className={`flex items-start gap-4 p-4 rounded-xl border ${
+              isCritical
+                ? 'bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-700'
+                : 'bg-orange-50 dark:bg-orange-950/30 border-orange-300 dark:border-orange-700'
+            }`}>
+              <AlertTriangle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${isCritical ? 'text-red-600 dark:text-red-400' : 'text-orange-600 dark:text-orange-400'}`} />
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-semibold ${isCritical ? 'text-red-900 dark:text-red-100' : 'text-orange-900 dark:text-orange-100'}`}>
+                  {isCritical ? '🚨 Critical eye strain risk detected' : '⚠️ High eye strain risk detected'}
+                </p>
+                <p className={`text-sm mt-0.5 ${isCritical ? 'text-red-800 dark:text-red-200' : 'text-orange-800 dark:text-orange-200'}`}>
+                  Your latest risk score is <strong>{prediction.risk_percentage?.toFixed(1)}%</strong>.
+                  {isCritical
+                    ? ' Rest your eyes now and consider reducing screen time today.'
+                    : ' Follow the recommendations below to bring your risk down.'}
+                </p>
+              </div>
+              <button
+                onClick={() => router.push('/risk-prediction')}
+                className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                  isCritical
+                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                    : 'bg-orange-600 hover:bg-orange-700 text-white'
+                }`}
+              >
+                View Details
+              </button>
+            </div>
+          );
+        })()}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-3xl sm:text-4xl font-bold text-foreground">

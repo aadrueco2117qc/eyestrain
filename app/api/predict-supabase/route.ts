@@ -27,14 +27,14 @@ export async function POST(request: NextRequest) {
     // ── Profile upsert ────────────────────────────────────────────────────────
     try {
       await supabase.from('user_profiles').upsert({
-        id: user.id,
+        user_id: user.id,
         first_name: formData.firstName || '',
         last_name:  formData.lastName  || '',
         age:           formData.age,
         gender:        formData.gender,
         year_level:    formData.yearLevel,
         field_of_study: formData.fieldOfStudy,
-      }, { onConflict: 'id' });
+      }, { onConflict: 'user_id' });
     } catch { /* non-fatal */ }
 
     // ── Raw inputs ────────────────────────────────────────────────────────────

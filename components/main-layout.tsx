@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Sidebar } from './sidebar';
 import { MobileNav } from './mobile-nav';
+import { NotificationBell } from './notification-bell';
 import { Menu } from 'lucide-react';
 import { AiChat } from './ai-chat';
 
@@ -26,7 +27,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       </div>
 
       <main className="flex-1 overflow-auto flex flex-col md:ml-64">
-        {/* Mobile header with menu button */}
+        {/* Mobile header — hamburger only, no bell bar */}
         <div className="md:hidden flex items-center justify-between p-4 border-b border-border bg-card sticky top-0 z-20">
           <h2 className="text-lg font-semibold text-foreground">EyeGuard</h2>
           <button
@@ -36,6 +37,11 @@ export function MainLayout({ children }: MainLayoutProps) {
           >
             <Menu className="w-5 h-5 text-foreground" />
           </button>
+        </div>
+
+        {/* Floating notification bell — top-right, transparent, no bar */}
+        <div className="fixed top-3 right-4 z-30 md:top-4 md:right-6">
+          <NotificationBell />
         </div>
 
         {/* Main content — extra bottom padding on mobile so content clears the bottom nav */}

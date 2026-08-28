@@ -94,6 +94,12 @@ interface ScreenTimeFormProps {
     headachesFrequency?: string;
     blurryVisionFrequency?: string;
     dryEyesFrequency?: string;
+    exerciseFrequency?: string;
+    outdoorTime?: string;
+    blueLight?: string;
+    screenHeight?: string;
+    screenDistance?: string;
+    roomLighting?: string;
   }) => Promise<void>;
   defaultValues?: {
     age?: string;
@@ -157,24 +163,24 @@ const FREQUENCY_OPTIONS = [
 ];
 
 const EXERCISE_OPTIONS = [
-  'None - Sedentary lifestyle',
-  'Minimal (1-2 times per week)',
-  'Moderate (3-4 times per week)',
-  'Regular (5+ times per week)',
+  'None',
+  'Minimal',
+  'Moderate',
+  'Regular',
 ];
 
 const OUTDOOR_TIME_OPTIONS = [
-  'Less than 30 minutes daily',
-  '30 minutes to 1 hour daily',
-  '1-2 hours daily',
-  'More than 2 hours daily',
+  '<30min',
+  '30min–1h',
+  '1–2h',
+  '>2h',
 ];
 
 const BLUE_LIGHT_OPTIONS = [
-  'Never use blue light filters',
-  'Sometimes (evenings only)',
-  'Regularly (most of the time)',
-  'Always (all day)',
+  'Never',
+  'Sometimes',
+  'Regularly',
+  'Always',
 ];
 
 const SCREEN_HEIGHT_OPTIONS = [
