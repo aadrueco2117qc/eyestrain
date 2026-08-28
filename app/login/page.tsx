@@ -3,25 +3,21 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Eye } from 'lucide-react';
-import { InputField, Button } from '@/components/form-components';
+import Image from 'next/image';
+import { Eye, EyeOff, Mail, Lock, ArrowRight, Shield } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
   const router = useRouter();
   const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL ? createClient() : null;
-  
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
 
+  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
     setError('');
   };
 
@@ -29,138 +25,154 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     setError('');
-
     try {
-      if (!supabase) {
-        throw new Error('Supabase is not configured. Please check your environment variables.');
-      }
-
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      if (!supabase) throw new Error('Service not configured.');
+      const { error: err } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
       });
-
-      if (signInError) throw signInError;
+      if (err) throw err;
       router.push('/dashboard');
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Login failed. Please try again.';
-      setError(errorMessage);
-      console.error('Login error:', err);
+      setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted flex flex-col md:flex-row">
-      {/* Left Side - Branding */}
-      <div className="hidden md:flex md:w-1/2 bg-primary/5 border-r border-border flex items-center justify-center p-8">
-        <div className="text-center space-y-6 max-w-md">
-          <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto">
-            <Eye className="w-8 h-8 text-primary-foreground" />
-          </div>
-          <h1 className="text-4xl font-bold text-foreground">EyeGuard</h1>
-          <p className="text-lg text-muted-foreground">
-            AI-powered eye health tracking for the digital age
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Predict eye strain. Protect your vision. Improve your health.
-          </p>
-        </div>
-      </div>
+    <div className="min-h-screen bg-[#0a0a0f] flex">
 
-      {/* Right Side - Form */}
-      <div className="w-full md:w-1/2 flex items-center justify-center p-8">
-        <div className="w-full max-w-md space-y-8">
-          {/* Logo for Mobile */}
-          <div className="md:hidden flex items-center gap-2 justify-center mb-8">
-            <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-              <Eye className="w-6 h-6 text-primary-foreground" />
-            </div>
-            <span className="text-2xl font-bold text-foreground">EyeGuard</span>
-          </div>
+      {/* ── Left panel ── */}
+      <div className="hidden lg:flex lg:w-[45%] relative flex-col items-center justify-center p-12 overflow-hidden">
+        {/* background glows */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-violet-500/10 pointer-events-none" />
+        <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-1/4 right-1/4 w-48 h-48 bg-violet-500/10 rounded-full blur-3xl pointer-events-none" />
 
-          <div className="space-y-2 text-center">
-            <h2 className="text-3xl font-bold text-foreground">Welcome Back</h2>
-            <p className="text-muted-foreground">
-              Sign in to continue to your eye health dashboard
+        <div className="relative z-10 text-center space-y-8 max-w-sm">
+          <div className="flex justify-center">
+            <Image src="/eyeguard-logo.svg" alt="EyeGuard" width={90} height={90} priority />
+          </div>
+          <div>
+            <h1 className="text-4xl font-bold text-white tracking-tight">EyeGuard</h1>
+            <p className="text-white/50 mt-2 text-sm leading-relaxed">
+              AI-powered eye health monitoring for students
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {error && (
-              <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-                {error}
+          {/* Steps */}
+          <div className="space-y-4 text-left">
+            {[
+              { n: '01', title: 'Log Daily', desc: 'Track screen time, symptoms, and habits' },
+              { n: '02', title: 'Get Your Score', desc: 'CVS-Q validated risk assessment' },
+              { n: '03', title: 'Improve', desc: 'Follow personalised recommendations' },
+            ].map(({ n, title, desc }) => (
+              <div key={n} className="flex items-start gap-4">
+                <span className="text-xs font-bold text-primary/60 mt-0.5 w-6 flex-shrink-0">{n}</span>
+                <div>
+                  <p className="text-sm font-semibold text-white/90">{title}</p>
+                  <p className="text-xs text-white/40">{desc}</p>
+                </div>
               </div>
-            )}
-
-            <InputField
-              label="Email Address"
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="john@example.com"
-              required
-            />
-
-            <div>
-              <InputField
-                label="Password"
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="••••••••"
-                required
-              />
-              <Link
-                href="/forgot-password"
-                className="text-sm text-primary hover:underline mt-2 inline-block"
-              >
-                Forgot password?
-              </Link>
-            </div>
-
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              className="w-full"
-              isLoading={isLoading}
-            >
-              Sign In
-            </Button>
-          </form>
-
-          <div className="space-y-4">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-border" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-background text-muted-foreground">Or continue with</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <Button type="button" variant="outline" size="lg" disabled>
-                Google
-              </Button>
-              <Button type="button" variant="outline" size="lg" disabled>
-                GitHub
-              </Button>
-            </div>
+            ))}
           </div>
 
-          <p className="text-center text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs text-white/30 justify-center">
+            <Shield className="w-3.5 h-3.5 text-primary/50" />
+            Research-backed · Free to use
+          </div>
+        </div>
+      </div>
+
+      {/* ── Right panel — form ── */}
+      <div className="flex-1 flex items-center justify-center p-6 sm:p-10">
+        <div className="w-full max-w-md space-y-8">
+
+          {/* Mobile logo */}
+          <div className="lg:hidden flex items-center gap-3 justify-center">
+            <Image src="/eyeguard-logo.svg" alt="EyeGuard" width={40} height={40} />
+            <span className="text-xl font-bold text-white">EyeGuard</span>
+          </div>
+
+          <div>
+            <h2 className="text-3xl font-bold text-white">Welcome back</h2>
+            <p className="text-white/50 mt-1.5 text-sm">Sign in to your eye health dashboard</p>
+          </div>
+
+          {error && (
+            <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Email */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-white/60 uppercase tracking-wide">Email Address</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="you@example.com"
+                  required
+                  className="w-full pl-11 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/25 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Password */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-white/60 uppercase tracking-wide">Password</label>
+                <Link href="/forgot-password" className="text-xs text-primary hover:text-primary/80 transition-colors">
+                  Forgot password?
+                </Link>
+              </div>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="••••••••"
+                  required
+                  className="w-full pl-11 pr-12 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/25 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(p => !p)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-primary/25 hover:-translate-y-0.5"
+            >
+              {isLoading ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>Sign In <ArrowRight className="w-4 h-4" /></>
+              )}
+            </button>
+          </form>
+
+          <p className="text-center text-sm text-white/40">
             Don&apos;t have an account?{' '}
-            <Link href="/signup" className="text-primary hover:underline font-semibold">
-              Sign up
+            <Link href="/signup" className="text-primary hover:text-primary/80 font-semibold transition-colors">
+              Create one free
             </Link>
           </p>
-
-
         </div>
       </div>
     </div>

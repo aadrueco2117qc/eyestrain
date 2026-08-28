@@ -2,17 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import Image from 'next/image';
 import {
-  LayoutDashboard,
-  Users,
-  Database,
-  BarChart3,
-  Activity,
-  Settings,
-  ChevronRight,
-  Eye,
-  LogOut,
-  TrendingUp,
+  LayoutDashboard, Users, Database, BarChart3,
+  Activity, Settings, ChevronRight, LogOut, TrendingUp, Eye,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -89,11 +82,9 @@ export function AdminSidebar({ isOpen }: AdminSidebarProps) {
     >
       {/* Logo */}
       <div className="p-6 border-b border-border flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-          <Eye className="w-6 h-6 text-primary-foreground" />
-        </div>
+        <Image src="/eyeguard-logo.svg" alt="EyeGuard" width={34} height={34} />
         <div>
-          <h1 className="font-bold text-foreground">EyeGuard</h1>
+          <h1 className="font-bold text-foreground text-sm">EyeGuard</h1>
           <p className="text-xs text-muted-foreground">Admin Panel</p>
         </div>
       </div>

@@ -2,12 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 import React, { useState, useEffect } from 'react';
-import { Eye, AlertCircle, TrendingUp, Clock, RefreshCw, LogOut, Flame, AlertTriangle } from 'lucide-react';
+import { Eye, AlertCircle, TrendingUp, Clock, RefreshCw, LogOut, Flame, AlertTriangle, Bot } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { MainLayout } from '@/components/main-layout';
 import { MetricCard } from '@/components/dashboard-card';
 import { Button } from '@/components/form-components';
-import { AiChat } from '@/components/ai-chat';
 import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts';
 
 export default function DashboardPage() {
@@ -557,19 +556,22 @@ export default function DashboardPage() {
               </ul>
             </div>
 
-            {/* Inline AI Chat */}
-            <div>
-              <h3 className="text-lg font-semibold text-foreground mb-4">🤖 Ask EyeGuard AI</h3>
-              <AiChat
-                mode="inline"
-                initialMessage={
-                  prediction
-                    ? `Hi ${user?.displayName?.split(' ')[0] || 'there'}! 👋 Based on your latest data, your eye strain risk is ${
-                        ['Low', 'Moderate', 'High', 'Critical'][prediction.risk_level] ?? 'Unknown'
-                      } (${prediction.risk_percentage?.toFixed(1)}%). Ask me anything about your eye health or what you can do to improve it!`
-                    : undefined
-                }
-              />
+            {/* AI Assistant link card */}
+            <div
+              role="button"
+              onClick={() => router.push('/ai-assistant')}
+              className="flex items-center justify-between p-5 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer group"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                  <Bot className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Personalised AI Recommendations available</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Ask EyeGuard AI about your data</p>
+                </div>
+              </div>
+              <span className="text-xs text-primary font-semibold group-hover:underline">View All →</span>
             </div>
           </div>
         ) : (

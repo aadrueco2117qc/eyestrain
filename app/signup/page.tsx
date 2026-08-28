@@ -1,332 +1,328 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Eye, Check, CheckCircle2 } from 'lucide-react';
-import { InputField, SelectField, Button } from '@/components/form-components';
+import Image from 'next/image';
+import {
+  Eye, EyeOff, Mail, User, Lock, Check,
+  CheckCircle2, ArrowRight, ArrowLeft, Shield,
+} from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
+const AGE_OPTIONS = Array.from({ length: 70 }, (_, i) => i + 13);
+
 export default function SignupPage() {
-  const router = useRouter();
   const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL ? createClient() : null;
-  
+
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    age: '',
-    agreeToTerms: false,
+    firstName: '', lastName: '', email: '', age: '',
+    password: '', confirmPassword: '', agreeToTerms: false,
   });
-
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [signupError, setSignupError] = useState('');
   const [emailSent, setEmailSent] = useState(false);
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
-    // Clear error for this field
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: '' }));
-    }
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
   };
 
-  const validateStep = () => {
-    const newErrors: Record<string, string> = {};
-
+  const validate = () => {
+    const e: Record<string, string> = {};
     if (step === 1) {
-      if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
-      if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
-      if (!formData.email.trim()) newErrors.email = 'Email is required';
-      else if (!formData.email.includes('@')) newErrors.email = 'Invalid email';
-      if (!formData.age) newErrors.age = 'Age is required';
-      else if (parseInt(formData.age) < 13) newErrors.age = 'Must be at least 13 years old';
-    } else if (step === 2) {
-      if (!formData.password) newErrors.password = 'Password is required';
-      else if (formData.password.length < 8) newErrors.password = 'Password must be at least 8 characters';
-      if (!formData.confirmPassword) newErrors.confirmPassword = 'Please confirm your password';
-      else if (formData.password !== formData.confirmPassword)
-        newErrors.confirmPassword = 'Passwords do not match';
-      if (!formData.agreeToTerms) newErrors.agreeToTerms = 'You must agree to the terms';
+      if (!formData.firstName.trim()) e.firstName = 'Required';
+      if (!formData.lastName.trim())  e.lastName  = 'Required';
+      if (!formData.email.trim())     e.email     = 'Required';
+      else if (!formData.email.includes('@')) e.email = 'Invalid email';
+      if (!formData.age) e.age = 'Required';
+    } else {
+      if (!formData.password)               e.password        = 'Required';
+      else if (formData.password.length < 8) e.password       = 'Min 8 characters';
+      if (!formData.confirmPassword)         e.confirmPassword = 'Required';
+      else if (formData.password !== formData.confirmPassword) e.confirmPassword = 'Passwords do not match';
+      if (!formData.agreeToTerms)            e.agreeToTerms   = 'You must agree to continue';
     }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
-  const handleNext = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSignupError('');
-    
-    if (validateStep()) {
-      if (step === 2) {
-        // Final submission - create account with Supabase
-        setIsLoading(true);
-        try {
-          if (!supabase) {
-            throw new Error('Supabase is not configured. Please check your environment variables.');
-          }
-          
-          const fullName = `${formData.firstName} ${formData.lastName}`;
-          const { error: signUpError } = await supabase.auth.signUp({
-            email: formData.email,
-            password: formData.password,
-            options: {
-              emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ??
-                `${window.location.origin}/auth/callback`,
-              data: {
-                name: fullName,
-                age: formData.age,
-              },
-            },
-          });
+    if (!validate()) return;
 
-          if (signUpError) throw signUpError;
-          // Show check-your-email screen — don't push to dashboard
-          // because Supabase email confirmation must be completed first
-          setEmailSent(true);
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Signup failed. Please try again.';
-          setSignupError(errorMessage);
-          console.error('Signup error:', error);
-        } finally {
-          setIsLoading(false);
-        }
-      } else {
-        setStep(2);
-      }
+    if (step === 1) { setStep(2); return; }
+
+    setIsLoading(true);
+    try {
+      if (!supabase) throw new Error('Service not configured.');
+      const { error: err } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ??
+            `${window.location.origin}/auth/callback`,
+          data: { name: `${formData.firstName} ${formData.lastName}`, age: formData.age },
+        },
+      });
+      if (err) throw err;
+      setEmailSent(true);
+    } catch (err) {
+      setSignupError(err instanceof Error ? err.message : 'Signup failed. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted flex flex-col md:flex-row">
-      {/* Email-sent confirmation screen */}
-      {emailSent && (
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="text-center space-y-6 max-w-md w-full">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 mx-auto">
-              <CheckCircle2 className="w-8 h-8 text-green-600 dark:text-green-400" />
-            </div>
-            <div className="space-y-2">
-              <h2 className="text-2xl font-bold text-foreground">Check your email</h2>
-              <p className="text-muted-foreground text-sm">
-                We've sent a confirmation link to{' '}
-                <strong className="text-foreground">{formData.email}</strong>.
-                Click the link in the email to activate your account.
-              </p>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Didn't receive it? Check your spam folder. Already confirmed?{' '}
-              <Link href="/login" className="text-primary hover:underline">Sign in</Link>
+  /* ── Email sent screen ── */
+  if (emailSent) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-8">
+        <div className="text-center space-y-6 max-w-sm">
+          <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto">
+            <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-white">Check your email</h2>
+            <p className="text-white/50 text-sm mt-2 leading-relaxed">
+              We sent a confirmation link to{' '}
+              <span className="text-white font-medium">{formData.email}</span>.
+              Click it to activate your account.
             </p>
           </div>
-        </div>
-      )}
-
-      {/* Sign-up form (hidden after email sent) */}
-      {!emailSent && (
-      <div className="hidden md:flex md:w-1/2 bg-primary/5 border-r border-border flex items-center justify-center p-8">
-        <div className="text-center space-y-6 max-w-md">
-          <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto">
-            <Eye className="w-8 h-8 text-primary-foreground" />
-          </div>
-          <h1 className="text-4xl font-bold text-foreground">EyeGuard</h1>
-          <p className="text-lg text-muted-foreground">
-            AI-powered eye health tracking for the digital age
+          <p className="text-xs text-white/30">
+            Didn&apos;t receive it? Check spam.{' '}
+            <Link href="/login" className="text-primary hover:underline">Sign in</Link>
           </p>
+        </div>
+      </div>
+    );
+  }
 
-          {/* Progress */}
-          <div className="mt-12 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-                {step > 1 ? <Check className="w-5 h-5" /> : '1'}
-              </div>
-              <span className={step >= 1 ? 'text-foreground' : 'text-muted-foreground'}>
-                Personal Details
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-                2
-              </div>
-              <span className={step >= 2 ? 'text-foreground' : 'text-muted-foreground'}>
-                Security & Agreements
-              </span>
-            </div>
+  return (
+    <div className="min-h-screen bg-[#0a0a0f] flex">
+
+      {/* ── Left panel ── */}
+      <div className="hidden lg:flex lg:w-[42%] relative flex-col items-center justify-center p-12 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-violet-500/10 pointer-events-none" />
+        <div className="absolute top-1/3 left-1/3 w-56 h-56 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 space-y-8 max-w-xs w-full">
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <Image src="/eyeguard-logo.svg" alt="EyeGuard" width={44} height={44} />
+            <span className="text-xl font-bold text-white">EyeGuard</span>
+          </div>
+
+          {/* Step indicators */}
+          <div className="space-y-2 pt-4">
+            {[
+              { n: 1, label: 'Personal Details',    desc: 'Basic info to set up your profile' },
+              { n: 2, label: 'Security & Agreement', desc: 'Password and consent' },
+            ].map(({ n, label, desc }) => {
+              const done    = step > n;
+              const active  = step === n;
+              return (
+                <div key={n} className={`flex items-start gap-4 p-4 rounded-xl border transition-all ${
+                  active  ? 'border-primary/40 bg-primary/10'  :
+                  done    ? 'border-white/10 bg-white/5'       :
+                  'border-white/5 opacity-50'
+                }`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold transition-all ${
+                    done   ? 'bg-emerald-500 text-white'        :
+                    active ? 'bg-primary text-white'            :
+                    'bg-white/10 text-white/40'
+                  }`}>
+                    {done ? <Check className="w-3.5 h-3.5" /> : n}
+                  </div>
+                  <div>
+                    <p className={`text-sm font-semibold ${active || done ? 'text-white' : 'text-white/40'}`}>{label}</p>
+                    <p className="text-xs text-white/40 mt-0.5">{desc}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-white/30">
+            <Shield className="w-3.5 h-3.5 text-primary/50" />
+            Your data is kept confidential and used only for research.
           </div>
         </div>
       </div>
 
-      {/* Right Side - Form */}
-      <div className="w-full md:w-1/2 flex items-center justify-center p-8">
+      {/* ── Right panel — form ── */}
+      <div className="flex-1 flex items-center justify-center p-6 sm:p-10">
         <div className="w-full max-w-md space-y-8">
-          {/* Logo for Mobile */}
-          <div className="md:hidden flex items-center gap-2 justify-center mb-8">
-            <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-              <Eye className="w-6 h-6 text-primary-foreground" />
-            </div>
-            <span className="text-2xl font-bold text-foreground">EyeGuard</span>
+
+          {/* Mobile logo */}
+          <div className="lg:hidden flex items-center gap-3">
+            <Image src="/eyeguard-logo.svg" alt="EyeGuard" width={36} height={36} />
+            <span className="text-lg font-bold text-white">EyeGuard</span>
           </div>
 
-          <div className="space-y-2 text-center">
-            <h2 className="text-3xl font-bold text-foreground">
+          {/* Heading */}
+          <div>
+            <p className="text-xs text-primary font-semibold tracking-widest uppercase mb-2">
+              Step {step} of 2
+            </p>
+            <h2 className="text-3xl font-bold text-white">
               {step === 1 ? 'Get Started' : 'Secure Your Account'}
             </h2>
-            <p className="text-muted-foreground">
+            <p className="text-white/50 mt-1.5 text-sm">
               {step === 1
-                ? 'Join thousands protecting their eye health'
-                : 'Create a secure password and review our terms'}
+                ? 'Enter your details to create your profile'
+                : 'Set a strong password and agree to the terms'}
             </p>
           </div>
 
-          <form onSubmit={handleNext} className="space-y-6">
-            {signupError && (
-              <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-                {signupError}
-              </div>
-            )}
-            
+          {signupError && (
+            <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              {signupError}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-5">
             {step === 1 ? (
               <>
+                {/* Name row */}
                 <div className="grid grid-cols-2 gap-4">
-                  <InputField
-                    label="First Name"
-                    name="firstName"
-                    value={formData.firstName}
-                    onChange={handleChange}
-                    placeholder="John"
-                    error={errors.firstName}
-                    required
-                  />
-                  <InputField
-                    label="Last Name"
-                    name="lastName"
-                    value={formData.lastName}
-                    onChange={handleChange}
-                    placeholder="Doe"
-                    error={errors.lastName}
-                    required
-                  />
+                  {[
+                    { name: 'firstName', label: 'First Name', placeholder: 'John' },
+                    { name: 'lastName',  label: 'Last Name',  placeholder: 'Doe' },
+                  ].map(({ name, label, placeholder }) => (
+                    <div key={name} className="space-y-1.5">
+                      <label className="text-xs font-semibold text-white/60 uppercase tracking-wide">{label}</label>
+                      <div className="relative">
+                        <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                        <input
+                          name={name}
+                          value={formData[name as keyof typeof formData] as string}
+                          onChange={handleChange}
+                          placeholder={placeholder}
+                          className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/25 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
+                        />
+                      </div>
+                      {errors[name] && <p className="text-xs text-red-400">{errors[name]}</p>}
+                    </div>
+                  ))}
                 </div>
 
-                <InputField
-                  label="Email Address"
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="john@example.com"
-                  error={errors.email}
-                  required
-                />
+                {/* Email */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-white/60 uppercase tracking-wide">Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                    <input
+                      type="email" name="email" value={formData.email} onChange={handleChange}
+                      placeholder="you@example.com"
+                      className="w-full pl-11 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/25 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
+                    />
+                  </div>
+                  {errors.email && <p className="text-xs text-red-400">{errors.email}</p>}
+                </div>
 
-                <SelectField
-                  label="Age"
-                  name="age"
-                  value={formData.age}
-                  onChange={handleChange}
-                  options={Array.from({ length: 70 }, (_, i) => ({
-                    value: String(i + 13),
-                    label: String(i + 13),
-                  }))}
-                  error={errors.age}
-                  required
-                />
+                {/* Age */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-white/60 uppercase tracking-wide">Age</label>
+                  <select
+                    name="age" value={formData.age} onChange={handleChange}
+                    className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="" className="bg-[#1a1a2e]">Select your age</option>
+                    {AGE_OPTIONS.map(a => (
+                      <option key={a} value={a} className="bg-[#1a1a2e]">{a}</option>
+                    ))}
+                  </select>
+                  {errors.age && <p className="text-xs text-red-400">{errors.age}</p>}
+                </div>
               </>
             ) : (
               <>
-                <InputField
-                  label="Password"
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  placeholder="••••••••"
-                  helperText="At least 8 characters"
-                  error={errors.password}
-                  required
-                />
+                {/* Password */}
+                {[
+                  { name: 'password',        label: 'Password',         show: showPassword, toggle: () => setShowPassword(p => !p), placeholder: '••••••••', hint: 'At least 8 characters' },
+                  { name: 'confirmPassword', label: 'Confirm Password',  show: showConfirm,  toggle: () => setShowConfirm(p => !p),  placeholder: '••••••••', hint: '' },
+                ].map(({ name, label, show, toggle, placeholder, hint }) => (
+                  <div key={name} className="space-y-1.5">
+                    <label className="text-xs font-semibold text-white/60 uppercase tracking-wide">{label}</label>
+                    <div className="relative">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                      <input
+                        type={show ? 'text' : 'password'}
+                        name={name}
+                        value={formData[name as keyof typeof formData] as string}
+                        onChange={handleChange}
+                        placeholder={placeholder}
+                        className="w-full pl-11 pr-12 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/25 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
+                      />
+                      <button type="button" onClick={toggle} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors">
+                        {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {hint && !errors[name] && <p className="text-xs text-white/30">{hint}</p>}
+                    {errors[name] && <p className="text-xs text-red-400">{errors[name]}</p>}
+                  </div>
+                ))}
 
-                <InputField
-                  label="Confirm Password"
-                  type="password"
-                  name="confirmPassword"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  placeholder="••••••••"
-                  error={errors.confirmPassword}
-                  required
-                />
-
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="agreeToTerms"
-                    checked={formData.agreeToTerms}
-                    onChange={handleChange}
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-muted-foreground">
+                {/* Terms */}
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${
+                    formData.agreeToTerms ? 'bg-primary border-primary' : 'border-white/20 bg-white/5'
+                  }`}>
+                    <input type="checkbox" name="agreeToTerms" checked={formData.agreeToTerms} onChange={handleChange} className="sr-only" />
+                    {formData.agreeToTerms && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                  <span className="text-sm text-white/50 leading-relaxed">
                     I agree to the{' '}
-                    <Link href="/terms" className="text-primary hover:underline">
-                      Terms of Service
-                    </Link>
+                    <Link href="/terms" className="text-primary hover:underline">Terms of Service</Link>
                     {' '}and{' '}
-                    <Link href="/privacy" className="text-primary hover:underline">
-                      Privacy Policy
-                    </Link>
+                    <Link href="/privacy" className="text-primary hover:underline">Privacy Policy</Link>
                   </span>
                 </label>
-                {errors.agreeToTerms && (
-                  <p className="text-xs text-destructive">{errors.agreeToTerms}</p>
-                )}
+                {errors.agreeToTerms && <p className="text-xs text-red-400">{errors.agreeToTerms}</p>}
               </>
             )}
 
-            <div className="flex gap-4">
+            {/* Buttons */}
+            <div className="flex gap-3 pt-2">
               {step === 2 && (
-                <Button
+                <button
                   type="button"
-                  variant="outline"
-                  size="lg"
-                  className="flex-1"
                   onClick={() => setStep(1)}
+                  className="flex items-center gap-2 px-5 py-3.5 rounded-xl border border-white/15 text-white/70 text-sm font-semibold hover:bg-white/5 transition-all"
                 >
-                  Back
-                </Button>
+                  <ArrowLeft className="w-4 h-4" /> Back
+                </button>
               )}
-              <Button
+              <button
                 type="submit"
-                variant="primary"
-                size="lg"
-                className="flex-1"
-                isLoading={isLoading}
+                disabled={isLoading}
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary/90 disabled:opacity-50 transition-all shadow-lg shadow-primary/25 hover:-translate-y-0.5"
               >
-                {step === 1 ? 'Continue' : 'Create Account'}
-              </Button>
+                {isLoading ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>{step === 1 ? 'Continue' : 'Create Account'} <ArrowRight className="w-4 h-4" /></>
+                )}
+              </button>
             </div>
           </form>
 
-          <p className="text-center text-muted-foreground">
+          <p className="text-center text-sm text-white/40">
             Already have an account?{' '}
-            <Link href="/login" className="text-primary hover:underline font-semibold">
+            <Link href="/login" className="text-primary hover:text-primary/80 font-semibold transition-colors">
               Sign in
             </Link>
           </p>
         </div>
       </div>
-      )}
     </div>
   );
 }

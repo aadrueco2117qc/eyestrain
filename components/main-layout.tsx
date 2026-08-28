@@ -5,7 +5,7 @@ import { Sidebar } from './sidebar';
 import { MobileNav } from './mobile-nav';
 import { NotificationBell } from './notification-bell';
 import { Menu } from 'lucide-react';
-import { AiChat } from './ai-chat';
+import Image from 'next/image';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -16,47 +16,53 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Sidebar - hidden on mobile, visible on md and up */}
-      <div className="hidden md:block">
+      {/* Sidebar — desktop */}
+      <div className="hidden md:block flex-shrink-0">
         <Sidebar isOpen={true} />
       </div>
 
-      {/* Mobile sidebar with overlay */}
+      {/* Sidebar — mobile slide-in */}
       <div className="md:hidden">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       </div>
 
-      <main className="flex-1 overflow-auto flex flex-col md:ml-64">
-        {/* Mobile header — hamburger only, no bell bar */}
-        <div className="md:hidden flex items-center justify-between p-4 border-b border-border bg-card sticky top-0 z-20">
-          <h2 className="text-lg font-semibold text-foreground">EyeGuard</h2>
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 hover:bg-muted rounded-lg transition-colors"
-            aria-label="Toggle menu"
-          >
-            <Menu className="w-5 h-5 text-foreground" />
-          </button>
-        </div>
+      {/* Main content column */}
+      <div className="flex-1 flex flex-col overflow-hidden">
 
-        {/* Floating notification bell — top-right, transparent, no bar */}
-        <div className="fixed top-3 right-4 z-30 md:top-4 md:right-6">
-          <NotificationBell />
-        </div>
+        {/* ── Top header bar ── */}
+        <header className="flex-shrink-0 h-14 flex items-center justify-between px-4 sm:px-6 border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-20">
+          {/* Left — hamburger on mobile, empty on desktop */}
+          <div className="flex items-center gap-3">
+            <button
+              className="md:hidden p-2 hover:bg-muted rounded-lg transition-colors"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open menu"
+            >
+              <Menu className="w-5 h-5 text-foreground" />
+            </button>
+            {/* Mobile logo */}
+            <div className="md:hidden flex items-center gap-2">
+              <Image src="/eyeguard-logo.svg" alt="EyeGuard" width={26} height={26} />
+              <span className="text-sm font-bold text-foreground">EyeGuard</span>
+            </div>
+          </div>
 
-        {/* Main content — extra bottom padding on mobile so content clears the bottom nav */}
-        <div className="flex-1 overflow-auto">
+          {/* Right — notification bell */}
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+          </div>
+        </header>
+
+        {/* ── Scrollable page content ── */}
+        <main className="flex-1 overflow-auto">
           <div className="p-4 pb-24 md:p-8 md:pb-8">
             {children}
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
 
-      {/* Mobile bottom navigation bar */}
+      {/* Mobile bottom nav */}
       <MobileNav />
-
-      {/* Global floating AI chat bubble — visible on all pages */}
-      <AiChat mode="bubble" />
     </div>
   );
 }

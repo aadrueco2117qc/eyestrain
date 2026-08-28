@@ -1,14 +1,16 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isAdmin } from '@/lib/admin-guard'
-import { generateXLSXBuffer, transformLogsForExcel, DAILY_LOG_COLUMNS } from '@/lib/csv-export'
+import { serializeToCSV, transformLogsForCSV, DAILY_LOG_COLUMNS } from '@/lib/csv-export'
 import { NextResponse } from 'next/server'
 
 const READABLE_HEADERS = [
   'Date',
+  'Email',
   'Age',
   'Gender',
   'Year Level',
+  'Field of Study',
   'Screen Time (hours)',
   'Breaks Taken',
   'Eye Strain',
@@ -18,13 +20,10 @@ const READABLE_HEADERS = [
   'Brightness (%)',
   'Sleep Hours',
   'Risk Level',
-  'Email',
-  'Field of Study',
   'Submitted At',
 ]
 
 export async function GET() {
-  // Auth check
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!isAdmin(user)) {
@@ -48,23 +47,19 @@ export async function GET() {
   }
 
   try {
-    const transformedLogs = transformLogsForExcel(
-      (logs ?? []) as Record<string, unknown>[],
-    )
-
-    const buffer = await generateXLSXBuffer(transformedLogs, READABLE_HEADERS)
-
+    const rows = transformLogsForCSV((logs ?? []) as Record<string, unknown>[])
+    const csv = serializeToCSV(rows, READABLE_HEADERS)
     const today = new Date().toISOString().split('T')[0]
 
-    return new Response(buffer, {
+    return new Response(csv, {
       status: 200,
       headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="eyeguard-export-${today}.xlsx"`,
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="eyeguard-export-${today}.csv"`,
       },
     })
   } catch (err) {
-    console.error('XLSX generation error:', err)
+    console.error('CSV generation error:', err)
     return NextResponse.json({ error: 'Failed to generate export' }, { status: 500 })
   }
 }

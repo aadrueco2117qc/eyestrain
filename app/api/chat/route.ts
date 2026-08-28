@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_MODEL = 'llama3-70b-8192';
 
 export async function POST(request: NextRequest) {
   try {
@@ -150,6 +150,12 @@ Guidelines:
     if (!groqRes.ok) {
       const errText = await groqRes.text();
       console.error('Groq API error:', groqRes.status, errText);
+      if (groqRes.status === 404) {
+        return NextResponse.json({ error: 'AI model not found. Please contact support.' }, { status: 502 });
+      }
+      if (groqRes.status === 401) {
+        return NextResponse.json({ error: 'AI service authentication failed.' }, { status: 502 });
+      }
       return NextResponse.json({ error: `AI service error (${groqRes.status})` }, { status: 502 });
     }
 
