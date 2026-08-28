@@ -1,6 +1,6 @@
 'use client';
 
-import { Calendar, Download, TrendingUp } from 'lucide-react';
+import { Calendar, Download, TrendingUp, Eye, BarChart3 } from 'lucide-react';
 import { MainLayout } from '@/components/main-layout';
 import { ChartCard, MetricCard } from '@/components/dashboard-card';
 import { Button, SelectField } from '@/components/form-components';
@@ -184,7 +184,12 @@ export default function AnalyticsPage() {
     return (
       <MainLayout>
         <div className="flex items-center justify-center min-h-screen">
-          <p className="text-lg text-muted-foreground">Loading analytics...</p>
+          <div className="text-center space-y-4">
+            <div className="inline-block p-4 bg-muted rounded-full">
+              <BarChart3 className="w-8 h-8 text-primary animate-pulse" />
+            </div>
+            <p className="text-lg text-muted-foreground">Loading analytics…</p>
+          </div>
         </div>
       </MainLayout>
     );
@@ -193,9 +198,22 @@ export default function AnalyticsPage() {
   if (!hasData) {
     return (
       <MainLayout>
-        <div className="text-center py-20">
-          <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">No Data Available</h1>
-          <p className="text-muted-foreground text-lg">Complete the daily log survey to view analytics.</p>
+        <div className="flex items-center justify-center min-h-96 rounded-lg border-2 border-dashed border-border bg-muted/30 m-4 md:m-8">
+          <div className="text-center space-y-4 p-8">
+            <div className="inline-block p-4 bg-primary/10 rounded-full">
+              <Eye className="w-12 h-12 text-primary" />
+            </div>
+            <h2 className="text-2xl font-bold text-foreground">No Data Yet</h2>
+            <p className="text-muted-foreground max-w-sm">
+              Complete the daily log survey to start seeing analytics and insights about your eye health.
+            </p>
+            <button
+              onClick={() => router.push('/daily-log')}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground text-sm font-semibold rounded-xl hover:bg-primary/90 transition-colors"
+            >
+              Start Daily Log
+            </button>
+          </div>
         </div>
       </MainLayout>
     );
