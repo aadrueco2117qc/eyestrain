@@ -75,6 +75,53 @@ def create_app(config_name='development'):
     # Register blueprints
     register_blueprints(app)
 
+    # ── Email endpoints ───────────────────────────────────────────────────────
+
+    @app.route('/api/email/send-reminder', methods=['POST'])
+    def send_reminder_email():
+        data = request.get_json() or {}
+        to_email = data.get("email", "")
+        name = data.get("name", "there")
+        risk_level = data.get("riskLevel", "")
+
+        if not to_email:
+            return jsonify({"success": False, "error": "email is required"}), 400
+
+        from email_scheduler import send_email
+        ok = send_email(to_email, name, risk_level)
+        if ok:
+            return jsonify({"success": True})
+        return jsonify({"success": False, "error": "SMTP not configured or send failed"}), 500
+
+    @app.route('/api/email/send-alert', methods=['POST'])
+    def send_alert_email():
+        """
+        Called by Next.js predict-supabase route when risk is High or Critical
+        and the user has enable_email_notifications = true.
+        """
+        provided_key = request.headers.get("X-Retrain-Key", "")
+        expected_key = app.config.get("RETRAIN_API_KEY", "")
+        if expected_key and provided_key != expected_key:
+            return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+        data = request.get_json() or {}
+        to_email = data.get("email", "")
+        name = data.get("name", "there")
+        risk_level = data.get("riskLevel", "")
+        recommendations = data.get("recommendations", [])
+
+        if not to_email:
+            return jsonify({"success": False, "error": "email is required"}), 400
+
+        if risk_level not in ("High", "Critical"):
+            return jsonify({"success": False, "error": "Only High/Critical alerts are sent"}), 400
+
+        from email_scheduler import send_high_risk_alert
+        ok = send_high_risk_alert(to_email, name, risk_level, recommendations)
+        if ok:
+            return jsonify({"success": True})
+        return jsonify({"success": False, "error": "SMTP not configured or send failed"}), 500
+
     # ── ML endpoints ─────────────────────────────────────────────────────────
     @app.route('/api/ml/notify-new-log', methods=['POST'])
     def notify_new_log():

@@ -27,14 +27,14 @@ export async function POST(request: NextRequest) {
     // ── Profile upsert ────────────────────────────────────────────────────────
     try {
       await supabase.from('user_profiles').upsert({
-        id: user.id,
+        user_id: user.id,
         first_name: formData.firstName || '',
         last_name:  formData.lastName  || '',
         age:           formData.age,
         gender:        formData.gender,
         year_level:    formData.yearLevel,
         field_of_study: formData.fieldOfStudy,
-      }, { onConflict: 'id' });
+      }, { onConflict: 'user_id' });
     } catch { /* non-fatal */ }
 
     // ── Raw inputs ────────────────────────────────────────────────────────────
@@ -43,9 +43,11 @@ export async function POST(request: NextRequest) {
     const brightness  = parseInt(formData.brightness)    || 70;
     const symptoms    = formData.symptoms                 || [];
 
-    // breaksTaken: try the dedicated field first, fall back to 0.
-    // The form sends this from the lifestyle section.
-    const breaksTaken = parseInt(formData.breaksTaken ?? formData.breaks_taken ?? '0') || 0;
+    // Break count is optional because the daily log does not ask users to record it.
+    const rawBreaksTaken = formData.breaksTaken ?? formData.breaks_taken;
+    const breaksTaken = rawBreaksTaken === undefined || rawBreaksTaken === null || rawBreaksTaken === ''
+      ? null
+      : Math.max(0, parseInt(rawBreaksTaken, 10) || 0);
 
     // Lifestyle signals collected in sections 4–5 of the survey
     const blueLight       = formData.blueLight       ?? '';   // 'Never'|'Sometimes'|'Regularly'|'Always'
@@ -114,7 +116,7 @@ export async function POST(request: NextRequest) {
 
     // Break adherence (AOA 20-20-20):
     //   Each break taken → –3 points, max –12
-    const breakMod = -Math.min(breaksTaken * 3, 12);
+    const breakMod = breaksTaken === null ? 0 : -Math.min(breaksTaken * 3, 12);
 
     // ── STEP 3 — Lifestyle bonus modifiers (protective factors) ───────────────
     // Blue-light filter usage reduces photostress (Sheppard & Wolffsohn 2018)
@@ -171,7 +173,7 @@ export async function POST(request: NextRequest) {
     const symptomFatigue  = (cvqRawScore / 12) * 5;          // 0–5 pts from symptoms
     const screenFatigue   = Math.min(screenTime / 3, 2.5);   // 0–2.5 pts (max at 7.5h)
     const sleepFatigue    = sleepHours < 6 ? 1.5 : sleepHours < 7 ? 0.8 : 0;  // 0–1.5 pts
-    const breakFatigue    = breaksTaken === 0 ? 1.0 : breaksTaken === 1 ? 0.5 : 0; // 0–1 pt
+    const breakFatigue    = breaksTaken === null ? 0 : breaksTaken === 0 ? 1.0 : breaksTaken === 1 ? 0.5 : 0; // 0–1 pt
     const fatigueRaw      = symptomFatigue + screenFatigue + sleepFatigue + breakFatigue;
     const fatigueScore    = parseFloat(Math.min(10, Math.max(0, fatigueRaw)).toFixed(1));
 
@@ -285,6 +287,59 @@ export async function POST(request: NextRequest) {
     // Fire-and-forget Flask retrain notification
     const flaskBase = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
     fetch(`${flaskBase}/api/ml/notify-new-log`, { method: 'POST' }).catch(() => {});
+
+    // ── High-risk email alert (fire-and-forget) ───────────────────────────────
+    // Only for High (2) or Critical (3) and only if user opted in
+    if (riskLevel >= 2) {
+      ;(async () => {
+        try {
+          const { data: userSettings } = await supabase
+            .from('user_settings')
+            .select('enable_email_notifications')
+            .eq('user_id', user.id)
+            .maybeSingle()
+
+          // Default to true if no row yet (user hasn't changed settings)
+          const wantsEmail = userSettings?.enable_email_notifications !== false
+
+          if (wantsEmail) {
+            const { data: profile } = await supabase
+              .from('user_profiles')
+              .select('first_name')
+              .eq('user_id', user.id)
+              .maybeSingle()
+
+            const name = profile?.first_name || user.email?.split('@')[0] || 'there'
+            const riskLabel = ['Low', 'Moderate', 'High', 'Critical'][riskLevel]
+            const retrainKey = process.env.NEXT_PUBLIC_RETRAIN_KEY ?? ''
+
+            const recTitles: string[] = Array.isArray(recommendations)
+              ? recommendations.slice(0, 3).map((r: { title?: string } | string) =>
+                  typeof r === 'string' ? r : (r?.title ?? '')
+                ).filter(Boolean)
+              : []
+
+            await fetch(`${flaskBase}/api/email/send-alert`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Retrain-Key': retrainKey,
+              },
+              body: JSON.stringify({
+                email: user.email,
+                name,
+                riskLevel: riskLabel,
+                recommendations: recTitles,
+              }),
+              signal: AbortSignal.timeout(10000),
+            })
+          }
+        } catch {
+          // Non-fatal — do not block the response
+        }
+      })()
+    }
+
 
     return NextResponse.json({
       success:          true,

@@ -1,12 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Save, Eye, LogOut, KeyRound, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Save, Eye, LogOut, KeyRound, EyeOff, CheckCircle2, AlertCircle, Bell } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { MainLayout } from '@/components/main-layout';
 import { AuthGuard } from '@/components/auth-guard';
 import { InputField, SelectField } from '@/components/form-components';
 import { createClient } from '@/lib/supabase/client';
+import { LogoutDialog } from '@/components/logout-dialog';
+import { validatePassword } from '@/lib/password-strength';
+import { PasswordStrengthMeter } from '@/components/password-strength-meter';
+
+const CONSENT_KEY = 'eyeguard_research_consent';
+const NOTICE_REMINDER_KEY = 'eyeguard_research_notice_reminder';
 
 // ─── Inline status banner ────────────────────────────────────────────────────
 function StatusBanner({ message }: { message: string }) {
@@ -29,10 +35,10 @@ function StatusBanner({ message }: { message: string }) {
 // ─── Section card ─────────────────────────────────────────────────────────────
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
-    <div className="bg-card border border-border rounded-2xl overflow-hidden">
-      <div className="px-6 py-5 border-b border-border">
-        <h2 className="text-base font-semibold text-foreground">{title}</h2>
-        {description && <p className="text-sm text-muted-foreground mt-0.5">{description}</p>}
+    <div className="border border-[#f97316]/10 bg-[#f97316]/[0.03] rounded-2xl overflow-hidden">
+      <div className="px-6 py-5 border-b border-[#f97316]/10">
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+        {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
       </div>
       <div className="px-6 py-6">{children}</div>
     </div>
@@ -53,6 +59,7 @@ export default function SettingsPage() {
     yearLevel: '',
     fieldOfStudy: '',
   });
+  const [otherYearLevel, setOtherYearLevel] = useState('');
 
   // Password change state
   const [passwords, setPasswords] = useState({ current: '', next: '', confirm: '' });
@@ -63,7 +70,18 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
-  const [consentEnabled, setConsentEnabled] = useState(true);
+  const [noticeReminderEnabled, setNoticeReminderEnabled] = useState(false);
+  const [showLogout, setShowLogout] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  // Notification settings state
+  const [notifSettings, setNotifSettings] = useState({
+    enable_email_notifications: true,
+    enable_daily_reminders: true,
+    reminder_time: '09:00',
+  });
+  const [isSavingNotif, setIsSavingNotif] = useState(false);
+  const [notifMessage, setNotifMessage] = useState('');
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -74,8 +92,7 @@ export default function SettingsPage() {
         setUser(authUser);
         setSettings((prev) => ({ ...prev, email: authUser.email || '' }));
 
-        const consentStored = localStorage.getItem('eyeguard_research_consent');
-        setConsentEnabled(consentStored === 'accepted');
+        setNoticeReminderEnabled(localStorage.getItem(NOTICE_REMINDER_KEY) === 'enabled');
 
         const { data: profile } = await supabase
           .from('user_profiles')
@@ -84,15 +101,33 @@ export default function SettingsPage() {
           .single();
 
         if (profile) {
+          const savedYearLevel = profile.year_level || '';
+          const standardYearLevels = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Other'];
           setSettings((prev) => ({
             ...prev,
             firstName: profile.first_name || '',
             lastName: profile.last_name || '',
             age: profile.age?.toString() || '',
             gender: profile.gender || '',
-            yearLevel: profile.year_level || '',
+            yearLevel: standardYearLevels.includes(savedYearLevel) ? savedYearLevel : savedYearLevel ? 'Other' : '',
             fieldOfStudy: profile.field_of_study || '',
           }));
+          if (savedYearLevel && !standardYearLevels.includes(savedYearLevel)) setOtherYearLevel(savedYearLevel);
+        }
+
+        // Load notification settings
+        const { data: userSettings } = await supabase
+          .from('user_settings')
+          .select('enable_email_notifications, enable_daily_reminders, reminder_time')
+          .eq('user_id', authUser.id)
+          .maybeSingle();
+
+        if (userSettings) {
+          setNotifSettings({
+            enable_email_notifications: userSettings.enable_email_notifications ?? true,
+            enable_daily_reminders:     userSettings.enable_daily_reminders     ?? true,
+            reminder_time:              (userSettings.reminder_time ?? '09:00:00').slice(0, 5),
+          });
         }
       } catch (err) {
         console.error('Error loading user data:', err);
@@ -120,7 +155,7 @@ export default function SettingsPage() {
         last_name: settings.lastName,
         age: settings.age ? parseInt(settings.age) : null,
         gender: settings.gender,
-        year_level: settings.yearLevel,
+        year_level: settings.yearLevel === 'Other' ? otherYearLevel.trim() : settings.yearLevel,
         field_of_study: settings.fieldOfStudy,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' });
@@ -144,8 +179,9 @@ export default function SettingsPage() {
       setPasswordMessage('Please fill in all password fields.');
       return;
     }
-    if (passwords.next.length < 8) {
-      setPasswordMessage('New password must be at least 8 characters.');
+    const passwordError = validatePassword(passwords.next);
+    if (passwordError) {
+      setPasswordMessage(passwordError);
       return;
     }
     if (passwords.next !== passwords.confirm) {
@@ -170,9 +206,38 @@ export default function SettingsPage() {
     }
   };
 
+  const handleSaveNotifications = async () => {
+    if (!user) return;
+    setIsSavingNotif(true);
+    setNotifMessage('');
+    try {
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert({
+          user_id: user.id,
+          enable_email_notifications: notifSettings.enable_email_notifications,
+          enable_daily_reminders:     notifSettings.enable_daily_reminders,
+          reminder_time:              notifSettings.reminder_time + ':00',
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+
+      if (error) {
+        setNotifMessage(`Error: ${error.message}`);
+      } else {
+        setNotifMessage('Notification settings saved!');
+        setTimeout(() => setNotifMessage(''), 5000);
+      }
+    } catch {
+      setNotifMessage('Failed to save. Please try again.');
+    } finally {
+      setIsSavingNotif(false);
+    }
+  };
+
   const handleLogout = async () => {
+    setLoggingOut(true);
     await supabase.auth.signOut();
-    router.push('/login');
+    router.push('/');
   };
 
   if (isLoading) {
@@ -195,7 +260,7 @@ export default function SettingsPage() {
   return (
     <AuthGuard>
       <MainLayout>
-        <div className="max-w-2xl space-y-6">
+        <div className="min-h-[calc(100vh-7rem)] w-full max-w-4xl mx-auto space-y-8 rounded-[2rem] bg-[radial-gradient(circle_at_8%_0%,rgba(249,115,22,0.08),transparent_30%),linear-gradient(160deg,rgba(251,191,100,0.10),rgba(249,115,22,0.04)_50%,rgba(180,100,30,0.06))] dark:bg-[radial-gradient(circle_at_8%_0%,rgba(249,115,22,0.14),transparent_32%),linear-gradient(135deg,rgba(67,28,12,0.45),rgba(15,10,7,0.08)_52%,rgba(120,53,15,0.12))] px-4 py-6 sm:px-8 sm:py-10">
 
           {/* Page header */}
           <div className="flex items-center justify-between">
@@ -204,11 +269,11 @@ export default function SettingsPage() {
               <p className="text-sm text-muted-foreground mt-1">Manage your account and preferences</p>
             </div>
             <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
+              onClick={() => setShowLogout(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-400 hover:bg-red-500/10 rounded-xl transition-colors"
             >
               <LogOut className="w-4 h-4" />
-              Logout
+              Sign out
             </button>
           </div>
 
@@ -262,10 +327,19 @@ export default function SettingsPage() {
                     { value: '2nd Year', label: '2nd Year' },
                     { value: '3rd Year', label: '3rd Year' },
                     { value: '4th Year', label: '4th Year' },
-                    { value: '5th Year or higher', label: '5th Year or higher' },
+                    { value: 'Other', label: 'Other' },
                   ]}
                 />
               </div>
+              {settings.yearLevel === 'Other' && (
+                <InputField
+                  label="Your Year Level"
+                  name="otherYearLevel"
+                  value={otherYearLevel}
+                  onChange={(e) => setOtherYearLevel(e.target.value)}
+                  placeholder="e.g. Graduate student, 6th Year"
+                />
+              )}
               <SelectField
                 label="Field of Study"
                 name="fieldOfStudy"
@@ -326,6 +400,7 @@ export default function SettingsPage() {
                     {showPasswords.next ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                <PasswordStrengthMeter password={passwords.next} />
               </div>
 
               {/* Confirm password */}
@@ -370,39 +445,133 @@ export default function SettingsPage() {
             </div>
           </Section>
 
+          {/* ── Notifications ── */}
+          <Section
+            title="Notifications"
+            description="Control when and how EyeGuard alerts you about your eye health"
+          >
+            <div className="space-y-5">
+              <StatusBanner message={notifMessage} />
+
+              {/* Email notifications toggle */}
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Email Notifications</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Receive high-risk alerts and reminders via email
+                  </p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={notifSettings.enable_email_notifications}
+                  onClick={() => setNotifSettings(prev => ({ ...prev, enable_email_notifications: !prev.enable_email_notifications }))}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                    notifSettings.enable_email_notifications ? 'bg-primary' : 'bg-muted'
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    notifSettings.enable_email_notifications ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
+              </div>
+
+              {/* Daily reminder toggle */}
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Daily Log Reminders</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Get a reminder email if you haven't logged today
+                  </p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={notifSettings.enable_daily_reminders}
+                  onClick={() => setNotifSettings(prev => ({ ...prev, enable_daily_reminders: !prev.enable_daily_reminders }))}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                    notifSettings.enable_daily_reminders ? 'bg-primary' : 'bg-muted'
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    notifSettings.enable_daily_reminders ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
+              </div>
+
+              {/* Reminder time picker — only shown when daily reminders are on */}
+              {notifSettings.enable_daily_reminders && (
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-foreground">
+                    Reminder Time
+                  </label>
+                  <input
+                    type="time"
+                    value={notifSettings.reminder_time}
+                    onChange={e => setNotifSettings(prev => ({ ...prev, reminder_time: e.target.value }))}
+                    className="w-40 px-3 py-2.5 border border-border rounded-xl bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    You'll receive a reminder at this time if you haven't logged yet
+                  </p>
+                </div>
+              )}
+
+              {/* High-risk alert note */}
+              <div className="flex items-start gap-3 p-3 rounded-xl bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800">
+                <Bell className="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-orange-800 dark:text-orange-200">
+                  <strong>High-risk alerts</strong> appear automatically on your dashboard and as an in-app notification whenever your risk score reaches High or Critical — regardless of these settings.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-5 border-t border-border flex justify-end">
+              <button
+                onClick={handleSaveNotifications}
+                disabled={isSavingNotif}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground text-sm font-medium rounded-xl hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              >
+                {isSavingNotif ? (
+                  <span className="w-4 h-4 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                {isSavingNotif ? 'Saving…' : 'Save Notifications'}
+              </button>
+            </div>
+          </Section>
+
           {/* ── Privacy ── */}
-          <Section title="Privacy">
+          <Section title="Privacy & Research Notice" description="Control the reminder shown before submitting new health research data">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-foreground">Research Consent Notice</p>
+                <p className="text-sm font-medium text-foreground">Show research notice before daily logs</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  <strong>ON</strong> — consent given, notice won't appear again.<br />
-                  <strong>OFF</strong> — notice will show next time you visit Daily Log.
+                  <strong>ON</strong> — show the privacy and research notice the next time you open Daily Log.<br />
+                  <strong>OFF</strong> — do not repeat the notice after your initial acknowledgement.
                 </p>
               </div>
               <button
                 role="switch"
-                aria-checked={consentEnabled}
+                aria-checked={noticeReminderEnabled}
                 onClick={() => {
-                  const next = !consentEnabled;
-                  setConsentEnabled(next);
-                  if (next) {
-                    localStorage.setItem('eyeguard_research_consent', 'accepted');
-                    setMessage('Consent accepted. The notice will no longer appear.');
-                  } else {
-                    localStorage.removeItem('eyeguard_research_consent');
-                    setMessage('Consent reset. The notice will appear again on your next Daily Log visit.');
-                  }
+                  const next = !noticeReminderEnabled;
+                  setNoticeReminderEnabled(next);
+                  localStorage.setItem(NOTICE_REMINDER_KEY, next ? 'enabled' : 'disabled');
+                  if (next) localStorage.setItem(CONSENT_KEY, 'accepted');
+                  setMessage(next ? 'Research notice reminder enabled.' : 'Research notice reminder disabled.');
                   setTimeout(() => setMessage(''), 4000);
                 }}
                 className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
-                  consentEnabled ? 'bg-primary' : 'bg-muted'
+                  noticeReminderEnabled ? 'bg-primary' : 'bg-muted'
                 }`}
               >
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                  consentEnabled ? 'translate-x-6' : 'translate-x-1'
+                  noticeReminderEnabled ? 'translate-x-6' : 'translate-x-1'
                 }`} />
               </button>
+            </div>
+            <div className="mt-5 rounded-xl border border-[#f97316]/15 bg-[#f97316]/[0.05] p-4 text-xs leading-relaxed text-muted-foreground">
+              Health and education information can be sensitive personal information under the Philippine Data Privacy Act of 2012 (Republic Act No. 10173). Read the <a href="/privacy" className="text-[#fb923c] underline">Privacy Policy</a> and <a href="/terms" className="text-[#fb923c] underline">Terms of Service</a> before participating.
             </div>
           </Section>
 
@@ -422,6 +591,12 @@ export default function SettingsPage() {
 
         </div>
       </MainLayout>
+      <LogoutDialog
+        open={showLogout}
+        onConfirm={handleLogout}
+        onCancel={() => setShowLogout(false)}
+        isLoading={loggingOut}
+      />
     </AuthGuard>
   );
 }

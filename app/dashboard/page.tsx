@@ -2,546 +2,316 @@
 
 import { useRouter } from 'next/navigation';
 import React, { useState, useEffect } from 'react';
-import { Eye, AlertCircle, TrendingUp, Clock, RefreshCw, LogOut, Flame } from 'lucide-react';
+import {
+  Eye, AlertCircle, Clock,
+  Flame, AlertTriangle, Activity, Users, Lightbulb, ArrowRight,
+} from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { MainLayout } from '@/components/main-layout';
 import { MetricCard } from '@/components/dashboard-card';
 import { Button } from '@/components/form-components';
-import { AiChat } from '@/components/ai-chat';
-import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts';
+
+/* ── Section icon ───────────────────────────────────────────────────── */
+function SectionIcon({ icon }: { icon: React.ReactNode }) {
+  return (
+    <div className="w-6 h-6 rounded-md bg-[#f97316]/15 flex items-center justify-center text-[#f97316] flex-shrink-0">
+      {icon}
+    </div>
+  );
+}
+
+/* ── Card wrapper — theme-aware, no hardcoded dark colours ─────────── */
+function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-xl border border-border bg-card/80 p-6 ${className}`}>
+      {children}
+    </div>
+  );
+}
 
 export default function DashboardPage() {
-  const router = useRouter();
+  const router  = useRouter();
   const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL ? createClient() : null;
-  
-  const [user, setUser] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState('');
-  const [prediction, setPrediction] = useState<any>(null);
-  const [hasData, setHasData] = useState(false);
-  const [allLogs, setAllLogs] = useState<any[]>([]);
-  const [analytics, setAnalytics] = useState<any>(null);
-  const [streak, setStreak] = useState(0);
-  const [groupAvg, setGroupAvg] = useState<any>(null);
-  const [riskHistory, setRiskHistory] = useState<any[]>([]);
+
+  const [user,        setUser]        = useState<any>(null);
+  const [isLoading,   setIsLoading]   = useState(true);
+  const [prediction,  setPrediction]  = useState<any>(null);
+  const [hasData,     setHasData]     = useState(false);
+  const [analytics,   setAnalytics]   = useState<any>(null);
+  const [streak,      setStreak]      = useState(0);
+  const [groupAvg,    setGroupAvg]    = useState<any>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        if (!supabase) {
-          console.error('Supabase is not configured');
-          router.push('/login');
-          return;
-        }
-
+        if (!supabase) { router.push('/login'); return; }
         const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (!authUser) {
-          router.push('/login');
-          return;
-        }
+        if (!authUser) { router.push('/login'); return; }
 
-        // Load user profile to get full name
         const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('user_id', authUser.id)
-          .single();
+          .from('user_profiles').select('*').eq('user_id', authUser.id).single();
 
-        // Combine auth user with profile data
-        const displayName = profile?.first_name && profile?.last_name 
-          ? `${profile.first_name} ${profile.last_name}`
-          : profile?.first_name 
-          ? profile.first_name
-          : authUser.user_metadata?.name 
-          ? authUser.user_metadata.name
-          : authUser.email?.split('@')[0] || 'User';
+        const displayName =
+          profile?.first_name && profile?.last_name
+            ? `${profile.first_name} ${profile.last_name}`
+            : profile?.first_name ?? authUser.user_metadata?.name ?? authUser.email?.split('@')[0] ?? 'User';
 
-        const userData = {
-          ...authUser,
-          profile: profile || null,
-          displayName: displayName
-        };
-
-        setUser(userData);
+        setUser({ ...authUser, profile: profile || null, displayName });
 
         const { data: logs } = await supabase
-          .from('daily_logs')
-          .select('*')
-          .eq('user_id', authUser.id)
+          .from('daily_logs').select('*').eq('user_id', authUser.id)
           .order('created_at', { ascending: false });
 
         if (logs && logs.length > 0) {
           setHasData(true);
-          setAllLogs(logs);
 
-          // Calculate logging streak
+          // Streak calculation
           const logDates = new Set(logs.map((l: any) => l.date));
-          let currentStreak = 0;
-          const checkDate = new Date();
-          checkDate.setHours(0, 0, 0, 0);
-          while (true) {
-            const dateStr = checkDate.toISOString().split('T')[0];
-            if (logDates.has(dateStr)) {
-              currentStreak++;
-              checkDate.setDate(checkDate.getDate() - 1);
-            } else {
-              break;
-            }
-          }
-          setStreak(currentStreak);
+          let s = 0;
+          const d = new Date(); d.setHours(0, 0, 0, 0);
+          while (logDates.has(d.toISOString().split('T')[0])) { s++; d.setDate(d.getDate() - 1); }
+          setStreak(s);
 
-          // Fetch group averages for comparison
           fetch('/api/stats/averages').then(r => r.json()).then(setGroupAvg).catch(() => {});
 
-          // Fetch last 7 predictions for risk history sparkline
-          const { data: recentPreds } = await supabase
-            .from('predictions')
-            .select('risk_percentage, created_at')
-            .eq('user_id', authUser.id)
-            .order('created_at', { ascending: true })
-            .limit(7);
-          if (recentPreds) {
-            setRiskHistory(recentPreds.map((p: any) => ({ value: p.risk_percentage ?? 0 })));
-          }
-
-          // Fetch latest prediction
           const { data: predictions } = await supabase
-            .from('predictions')
-            .select('*')
-            .eq('user_id', authUser.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
+            .from('predictions').select('*').eq('user_id', authUser.id)
+            .order('created_at', { ascending: false }).limit(1).single();
+          if (predictions) setPrediction(predictions);
 
-          if (predictions) {
-            setPrediction(predictions);
-          }
-
-          // Calculate analytics from all logs
-          const avgScreenTime = logs.length > 0 
-            ? (logs.reduce((sum, log) => sum + (log.screen_time || 0), 0) / logs.length).toFixed(1)
-            : 0;
-          
-          const avgSleepHours = logs.length > 0
-            ? (logs.reduce((sum, log) => sum + (log.sleep_hours || 0), 0) / logs.length).toFixed(1)
-            : 0;
-          
-          const avgBrightness = logs.length > 0
-            ? (logs.reduce((sum, log) => sum + (log.brightness || 0), 0) / logs.length).toFixed(0)
-            : 0;
-
-          // Count symptom frequencies
-          const eyeStrainCount = logs.filter(log => log.eye_strain === 1).length;
-          const headachesCount = logs.filter(log => log.headaches === 1).length;
-          const dryEyesCount = logs.filter(log => log.dry_eyes === 1).length;
-          const blurryVisionCount = logs.filter(log => log.blurry_vision === 1).length;
-
+          const n = logs.length;
+          const avg = (key: string) => logs.reduce((s: number, l: any) => s + (l[key] || 0), 0) / n;
           setAnalytics({
-            averageScreenTime: avgScreenTime,
-            averageSleepHours: avgSleepHours,
-            averageBrightness: avgBrightness,
-            totalLogsRecorded: logs.length,
-            eyeStrainFrequency: eyeStrainCount,
-            headachesFrequency: headachesCount,
-            dryEyesFrequency: dryEyesCount,
-            blurryVisionFrequency: blurryVisionCount,
-            logs: logs,
+            averageScreenTime:  avg('screen_time').toFixed(1),
+            averageSleepHours:  avg('sleep_hours').toFixed(1),
+            averageBrightness:  avg('brightness').toFixed(0),
+            totalLogsRecorded:  n,
           });
         } else {
           setHasData(false);
         }
-      } catch (err) {
-        console.error('Auth check error:', err);
-        router.push('/login');
-      } finally {
-        setIsLoading(false);
-      }
+      } catch { router.push('/login'); }
+      finally { setIsLoading(false); }
     };
-
     checkAuth();
   }, [router, supabase]);
 
-  // Redirect to daily log if no data
   useEffect(() => {
-    if (!isLoading && !hasData) {
-      router.push('/daily-log');
-    }
+    if (!isLoading && !hasData) router.push('/daily-log');
   }, [hasData, isLoading, router]);
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-      router.push('/login');
-    } catch (err) {
-      console.error('Logout failed:', err);
-    }
-  };
-
-  const handleRefreshPredictions = async () => {
-    setIsRefreshing(true);
-    setError('');
-    try {
-      if (user && supabase) {
-        const { data: logs } = await supabase
-          .from('daily_logs')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (logs && logs.length > 0) {
-          setHasData(true);
-          setAllLogs(logs);
-
-          const { data: predictions } = await supabase
-            .from('predictions')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-
-          if (predictions) {
-            setPrediction(predictions);
-          }
-
-          // Recalculate analytics
-          const avgScreenTime = logs.length > 0 
-            ? (logs.reduce((sum, log) => sum + (log.screen_time || 0), 0) / logs.length).toFixed(1)
-            : 0;
-          
-          const avgSleepHours = logs.length > 0
-            ? (logs.reduce((sum, log) => sum + (log.sleep_hours || 0), 0) / logs.length).toFixed(1)
-            : 0;
-          
-          const avgBrightness = logs.length > 0
-            ? (logs.reduce((sum, log) => sum + (log.brightness || 0), 0) / logs.length).toFixed(0)
-            : 0;
-
-          const eyeStrainCount = logs.filter(log => log.eye_strain === 1).length;
-          const headachesCount = logs.filter(log => log.headaches === 1).length;
-          const dryEyesCount = logs.filter(log => log.dry_eyes === 1).length;
-          const blurryVisionCount = logs.filter(log => log.blurry_vision === 1).length;
-
-          setAnalytics({
-            averageScreenTime: avgScreenTime,
-            averageSleepHours: avgSleepHours,
-            averageBrightness: avgBrightness,
-            totalLogsRecorded: logs.length,
-            eyeStrainFrequency: eyeStrainCount,
-            headachesFrequency: headachesCount,
-            dryEyesFrequency: dryEyesCount,
-            blurryVisionFrequency: blurryVisionCount,
-            logs: logs,
-          });
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to refresh');
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <MainLayout>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center space-y-4">
-            <div className="inline-block p-4 bg-muted rounded-full">
-              <Eye className="w-8 h-8 text-primary animate-pulse" />
-            </div>
-            <p className="text-lg text-muted-foreground">Loading your dashboard...</p>
+  if (isLoading || !hasData) return (
+    <MainLayout>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-3">
+          <div className="inline-block p-4 bg-[#f97316]/10 rounded-full">
+            <Eye className="w-8 h-8 text-[#f97316] animate-pulse" />
           </div>
+          <p className="text-muted-foreground">{isLoading ? 'Loading your dashboard…' : 'Redirecting…'}</p>
         </div>
-      </MainLayout>
-    );
-  }
+      </div>
+    </MainLayout>
+  );
 
-  if (!hasData) {
-    return (
-      <MainLayout>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center space-y-4">
-            <div className="inline-block p-4 bg-muted rounded-full">
-              <Eye className="w-8 h-8 text-primary animate-pulse" />
-            </div>
-            <p className="text-lg text-muted-foreground">Redirecting to daily log...</p>
-          </div>
-        </div>
-      </MainLayout>
-    );
-  }
+  /* ── Risk colour helpers ─────────────────────────────────────────── */
+  const rl = prediction?.risk_level ?? 0;
+  const riskText  = rl === 0 ? 'text-green-600 dark:text-green-400'  : rl === 1 ? 'text-yellow-600 dark:text-yellow-400' : rl === 2 ? 'text-orange-600 dark:text-orange-400' : 'text-red-600 dark:text-red-400';
+  const riskBg    = rl === 0 ? 'bg-green-500/8 border-green-500/20'  : rl === 1 ? 'bg-yellow-500/8 border-yellow-500/20' : rl === 2 ? 'bg-orange-500/8 border-orange-500/20' : 'bg-red-500/8 border-red-500/20';
+  const riskIcon  = rl === 0 ? 'text-green-500/50'  : rl === 1 ? 'text-yellow-500/50' : rl === 2 ? 'text-orange-500/50' : 'text-red-500/50';
 
-  // Only render prediction data if it exists
   return (
     <MainLayout>
-      <div className="space-y-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      {/* ── Page wrapper — light: warm cream gradient, dark: deep amber ── */}
+      <div className="min-h-[calc(100vh-7rem)] w-full max-w-6xl mx-auto space-y-8
+        rounded-[2rem] px-4 py-6 sm:px-8 sm:py-10
+        bg-[radial-gradient(circle_at_8%_0%,rgba(249,115,22,0.08),transparent_30%),linear-gradient(160deg,rgba(251,191,100,0.10),rgba(249,115,22,0.04)_50%,rgba(180,100,30,0.06))]
+        dark:bg-[radial-gradient(circle_at_8%_0%,rgba(249,115,22,0.14),transparent_32%),linear-gradient(135deg,rgba(67,28,12,0.45),rgba(15,10,7,0.08)_52%,rgba(120,53,15,0.12))]">
+
+        {/* ── Risk alert banner ─────────────────────────────────────── */}
+        {prediction && rl >= 2 && (
+          <div className={`flex items-start gap-4 p-4 rounded-xl border ${
+            rl === 3
+              ? 'bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-700'
+              : 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-700'
+          }`}>
+            <AlertTriangle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${rl === 3 ? 'text-red-600 dark:text-red-400' : 'text-orange-600 dark:text-orange-400'}`} />
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm font-semibold ${rl === 3 ? 'text-red-700 dark:text-red-400' : 'text-orange-700 dark:text-orange-400'}`}>
+                {rl === 3 ? 'Critical eye strain risk detected' : 'High eye strain risk detected'}
+              </p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Your latest risk score is <strong className="text-foreground">{prediction.risk_percentage?.toFixed(1)}%</strong>.
+                {rl === 3 ? ' Rest your eyes now and reduce screen time today.' : ' Follow the recommendations below to bring your risk down.'}
+              </p>
+            </div>
+            <button
+              onClick={() => router.push('/risk-prediction')}
+              className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                rl === 3
+                  ? 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-500/30'
+                  : 'bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-500/30'
+              }`}
+            >
+              View Details
+            </button>
+          </div>
+        )}
+
+        {/* ── Page header ───────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-foreground">
-              Welcome back, {user?.displayName || 'User'}!
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+              Welcome back, {user?.displayName || 'User'}
             </h1>
-            <p className="text-muted-foreground mt-2">Real-time eye health analysis powered by AI</p>
+            <p className="text-muted-foreground text-sm mt-1">Eye health analysis powered by machine learning</p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <Button
-              variant="primary"
-              size="lg"
-              onClick={() => router.push('/daily-log')}
-              className="flex items-center justify-center gap-2"
-            >
-              <Clock className="w-4 h-4" />
-              Log New Data
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={handleRefreshPredictions}
-              isLoading={isRefreshing}
-              className="flex items-center justify-center gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Refresh
-            </Button>
-            <Button
-              variant="ghost"
-              size="lg"
-              onClick={handleLogout}
-              className="flex items-center justify-center gap-2 text-destructive hover:bg-destructive/10"
-            >
-              <LogOut className="w-4 h-4" />
-              Logout
-            </Button>
-          </div>
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={() => router.push('/daily-log')}
+            className="flex items-center gap-2 self-start sm:self-auto"
+          >
+            <Clock className="w-4 h-4" />
+            Log Today
+          </Button>
         </div>
 
-        {/* Risk Prediction Section */}
         {prediction ? (
           <div className="space-y-6">
-            {/* Risk Level and Key Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-              <div className={`rounded-xl border border-border p-6 ${
-                prediction.risk_level === 0 ? 'bg-green-500/10' :
-                prediction.risk_level === 1 ? 'bg-yellow-500/10' :
-                prediction.risk_level === 2 ? 'bg-orange-500/10' :
-                'bg-red-500/10'
-              }`}>
-                <div className="flex items-center justify-between">
+
+            {/* ── Metric cards ─────────────────────────────────────── */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+              {/* Risk card */}
+              <div className={`rounded-xl border p-5 ${riskBg}`}>
+                <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Eye Strain Risk</p>
-                    <p className={`text-3xl font-bold mt-2 ${
-                      prediction.risk_level === 0 ? 'text-green-600' :
-                      prediction.risk_level === 1 ? 'text-yellow-600' :
-                      prediction.risk_level === 2 ? 'text-orange-600' :
-                      'text-red-600'
-                    }`}>{prediction.risk_percentage?.toFixed(1) || 'N/A'}%</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {prediction.risk_level === 0 ? 'Low' : prediction.risk_level === 1 ? 'Moderate' : prediction.risk_level === 2 ? 'High' : 'Critical'}
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Eye Strain Risk</p>
+                    <p className={`text-3xl font-bold tabular-nums ${riskText}`}>
+                      {prediction.risk_percentage?.toFixed(1) ?? '—'}%
+                    </p>
+                    <p className={`text-sm font-semibold mt-1 ${riskText}`}>
+                      {['Low', 'Moderate', 'High', 'Critical'][rl] ?? '—'}
                     </p>
                   </div>
-                  <Eye className={`w-12 h-12 ${
-                    prediction.risk_level === 0 ? 'text-green-600' :
-                    prediction.risk_level === 1 ? 'text-yellow-600' :
-                    prediction.risk_level === 2 ? 'text-orange-600' :
-                    'text-red-600'
-                  }`} />
+                  <Eye className={`w-8 h-8 mt-1 ${riskIcon}`} />
                 </div>
               </div>
 
               <MetricCard
-                title="Fatigue Score"
-                value={prediction.fatigue_score?.toFixed(1) || 'N/A'}
-                unit="/10"
-                icon={<TrendingUp className="w-6 h-6 text-primary" />}
-              />
-
-              <MetricCard
-                title="Data Completeness"
-                value={prediction.confidence ? (prediction.confidence * 100).toFixed(0) : 'N/A'}
-                unit="%"
-                icon={<Eye className="w-6 h-6 text-secondary" />}
-              />
-
-              <MetricCard
-                title="Data Points"
-                value={analytics?.totalLogsRecorded || '0'}
+                title="Total Logs"
+                value={analytics?.totalLogsRecorded ?? '0'}
                 description="Logs recorded"
-                icon={<AlertCircle className="w-6 h-6 text-blue-500" />}
+                icon={<Activity className="w-5 h-5 text-primary" />}
               />
-
               <MetricCard
                 title="Logging Streak"
                 value={streak}
                 unit={streak === 1 ? ' day' : ' days'}
-                description={streak >= 7 ? '🔥 On fire!' : streak >= 3 ? '⚡ Keep it up!' : 'Log daily to build streak'}
-                icon={<Flame className={`w-6 h-6 ${streak >= 7 ? 'text-orange-500' : streak >= 3 ? 'text-yellow-500' : 'text-muted-foreground'}`} />}
+                description={streak >= 7 ? 'On fire! 🔥' : streak >= 3 ? 'Keep it up!' : 'Log daily'}
+                icon={<Flame className={`w-5 h-5 ${streak >= 7 ? 'text-[#f97316]' : streak >= 3 ? 'text-yellow-500' : 'text-muted-foreground'}`} />}
               />
             </div>
 
-            {/* Analytics Section */}
-            {analytics && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="border border-border rounded-xl p-6">
-                  <h3 className="text-lg font-semibold text-foreground mb-4">📊 Analytics</h3>
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center pb-3 border-b border-border">
-                      <span className="text-sm text-muted-foreground">Avg Screen Time</span>
-                      <span className="font-semibold text-foreground">{analytics.averageScreenTime} hrs</span>
-                    </div>
-                    <div className="flex justify-between items-center pb-3 border-b border-border">
-                      <span className="text-sm text-muted-foreground">Avg Sleep</span>
-                      <span className="font-semibold text-foreground">{analytics.averageSleepHours} hrs</span>
-                    </div>
-                    <div className="flex justify-between items-center pb-3 border-b border-border">
-                      <span className="text-sm text-muted-foreground">Avg Brightness</span>
-                      <span className="font-semibold text-foreground">{analytics.averageBrightness}%</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">Total Logs</span>
-                      <span className="font-semibold text-foreground">{analytics.totalLogsRecorded}</span>
-                    </div>
-                  </div>
-                </div>
+            {/* ── Two-column section: peer comparison + nudge ──────── */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-                {/* Symptoms Trends */}
-                <div className="border border-border rounded-xl p-6">
-                  <h3 className="text-lg font-semibold text-foreground mb-4">📈 Symptoms Trend</h3>
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center pb-3 border-b border-border">
-                      <span className="text-sm text-muted-foreground">Eye Strain</span>
-                      <span className="font-semibold text-foreground">{analytics.eyeStrainFrequency} times</span>
-                    </div>
-                    <div className="flex justify-between items-center pb-3 border-b border-border">
-                      <span className="text-sm text-muted-foreground">Headaches</span>
-                      <span className="font-semibold text-foreground">{analytics.headachesFrequency} times</span>
-                    </div>
-                    <div className="flex justify-between items-center pb-3 border-b border-border">
-                      <span className="text-sm text-muted-foreground">Dry Eyes</span>
-                      <span className="font-semibold text-foreground">{analytics.dryEyesFrequency} times</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">Blurry Vision</span>
-                      <span className="font-semibold text-foreground">{analytics.blurryVisionFrequency} times</span>
-                    </div>
+              {/* Peer comparison */}
+              {groupAvg && analytics && (
+                <Card>
+                  <div className="flex items-center gap-2 mb-1">
+                    <SectionIcon icon={<Users className="w-3.5 h-3.5" />} />
+                    <h3 className="text-sm font-semibold text-foreground">How You Compare</h3>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Comparison + Risk History */}
-            {(groupAvg || riskHistory.length > 0) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Group Comparison */}
-                {groupAvg && analytics && (
-                  <div className="border border-border rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-foreground mb-4">📊 How You Compare</h3>
-                    <p className="text-xs text-muted-foreground mb-4">vs. average of {groupAvg.totalRespondents} respondents</p>
-                    <div className="space-y-4">
-                      {[
-                        { label: 'Screen Time', yours: parseFloat(analytics.averageScreenTime), avg: groupAvg.avgScreenTime, unit: 'h', lowerIsBetter: true },
-                        { label: 'Sleep Hours', yours: parseFloat(analytics.averageSleepHours), avg: groupAvg.avgSleepHours, unit: 'h', lowerIsBetter: false },
-                        { label: 'Brightness', yours: parseInt(analytics.averageBrightness), avg: groupAvg.avgBrightness, unit: '%', lowerIsBetter: false, optimal: 70 },
-                      ].map(({ label, yours, avg, unit, lowerIsBetter, optimal }) => {
-                        const better = optimal
-                          ? Math.abs(yours - optimal) <= Math.abs(avg - optimal)
-                          : lowerIsBetter ? yours <= avg : yours >= avg;
-                        return (
-                          <div key={label} className="flex items-center justify-between gap-4">
-                            <span className="text-sm text-muted-foreground w-24">{label}</span>
-                            <div className="flex items-center gap-2 flex-1">
-                              <span className={`text-sm font-semibold ${better ? 'text-green-600' : 'text-orange-600'}`}>
+                  <p className="text-xs text-muted-foreground mb-5 ml-8">
+                    vs. average of {groupAvg.totalRespondents} respondents
+                  </p>
+                  <div className="space-y-4">
+                    {[
+                      { label: 'Screen Time', yours: parseFloat(analytics.averageScreenTime), avg: groupAvg.avgScreenTime, unit: 'h',  lowerIsBetter: true },
+                      { label: 'Sleep Hours', yours: parseFloat(analytics.averageSleepHours),  avg: groupAvg.avgSleepHours,  unit: 'h',  lowerIsBetter: false },
+                      { label: 'Brightness',  yours: parseInt(analytics.averageBrightness),    avg: groupAvg.avgBrightness,  unit: '%',  lowerIsBetter: false, optimal: 70 },
+                    ].map(({ label, yours, avg, unit, lowerIsBetter, optimal }) => {
+                      const better = optimal
+                        ? Math.abs(yours - optimal) <= Math.abs(avg - optimal)
+                        : lowerIsBetter ? yours <= avg : yours >= avg;
+                      return (
+                        <div key={label}>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-sm text-muted-foreground">{label}</span>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-sm font-semibold ${better ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
                                 You: {yours}{unit}
                               </span>
-                              <span className="text-xs text-muted-foreground">vs Avg: {avg}{unit}</span>
-                              <span className="text-xs">{better ? '✓' : '↑'}</span>
+                              <span className="text-xs text-muted-foreground">vs {avg}{unit}</span>
+                              <span className={`text-xs font-bold ${better ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                                {better ? '✓' : '↑'}
+                              </span>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Risk History Sparkline */}
-                {riskHistory.length > 1 && (
-                  <div className="border border-border rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-foreground mb-1">📉 Risk History</h3>
-                    <p className="text-xs text-muted-foreground mb-4">Last {riskHistory.length} submissions</p>
-                    <div className="h-28">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={riskHistory}>
-                          <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Risk']} contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--foreground)', fontSize: '12px' }} />
-                          <Line type="monotone" dataKey="value" stroke="#ef4444" strokeWidth={2} dot={{ r: 3, fill: '#ef4444' }} activeDot={{ r: 5 }} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div className="flex justify-between text-xs text-muted-foreground mt-2">
-                      <span>Earliest</span>
-                      <span>Latest: {riskHistory[riskHistory.length - 1]?.value?.toFixed(1)}%</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Recommendations */}
-            <div className="border border-border rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4">💡 Personalized Recommendations</h3>
-              <ul className="space-y-3">
-                {prediction.recommendations?.map(
-                  (rawRec: unknown, idx: number) => {
-                    // Parse stringified JSON objects if needed
-                    let rec = rawRec;
-                    if (typeof rawRec === 'string') {
-                      try {
-                        const parsed = JSON.parse(rawRec);
-                        if (parsed && typeof parsed === 'object' && parsed.title) rec = parsed;
-                      } catch { /* plain string */ }
-                    }
-                    if (typeof rec === 'string') {
-                      return (
-                        <li key={idx} className="flex items-start gap-3">
-                          <div className="mt-1 w-2 h-2 rounded-full bg-primary flex-shrink-0" />
-                          <span className="text-sm text-muted-foreground">{rec}</span>
-                        </li>
-                      )
-                    }
-                    const r = rec as { title: string; description: string; category: string }
-                    return (
-                      <li key={idx} className="flex items-start gap-3">
-                        <div className="mt-1 w-2 h-2 rounded-full bg-primary flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{r.title}</p>
-                          <p className="text-sm text-muted-foreground mt-0.5">{r.description}</p>
+                          <div className="h-1.5 rounded-full bg-border overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${better ? 'bg-green-500' : 'bg-orange-500'}`}
+                              style={{ width: `${Math.min(100, (yours / (avg * 1.5)) * 100)}%` }}
+                            />
+                          </div>
                         </div>
-                      </li>
-                    )
-                  }
-                )}
-              </ul>
+                      );
+                    })}
+                  </div>
+                </Card>
+              )}
+
+              {/* ── Your next best action — own card ─────────────── */}
+              {prediction.recommendations?.length > 0 && (
+                <Card>
+                  <div className="flex items-center gap-2 mb-4">
+                    <SectionIcon icon={<Lightbulb className="w-3.5 h-3.5" />} />
+                    <h3 className="text-sm font-semibold text-foreground">Your next best action</h3>
+                  </div>
+                  <ul className="space-y-3">
+                    {prediction.recommendations.slice(0, 3).map((rawRec: unknown, idx: number) => {
+                      let rec = rawRec;
+                      if (typeof rawRec === 'string') {
+                        try { const p = JSON.parse(rawRec); if (p?.title) rec = p; } catch { /* plain */ }
+                      }
+                      if (typeof rec === 'string') return (
+                        <li key={idx} className="flex items-start gap-3">
+                          <span className="mt-2 w-1.5 h-1.5 rounded-full bg-[#f97316]/60 flex-shrink-0" />
+                          <span className="text-sm text-foreground">{rec}</span>
+                        </li>
+                      );
+                      const r = rec as { title: string; description?: string };
+                      return (
+                        <li key={idx} className="flex items-start gap-3 py-1">
+                          <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[#f97316] flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{r.title}</p>
+                            {r.description && (
+                              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{r.description}</p>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <button
+                    onClick={() => router.push('/risk-prediction')}
+                    className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-[#f97316] hover:text-[#fb923c] transition-colors"
+                  >
+                    See full assessment
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </Card>
+              )}
             </div>
 
-            {/* Inline AI Chat */}
-            <div>
-              <h3 className="text-lg font-semibold text-foreground mb-4">🤖 Ask EyeGuard AI</h3>
-              <AiChat
-                mode="inline"
-                initialMessage={
-                  prediction
-                    ? `Hi ${user?.displayName?.split(' ')[0] || 'there'}! 👋 Based on your latest data, your eye strain risk is ${
-                        ['Low', 'Moderate', 'High', 'Critical'][prediction.risk_level] ?? 'Unknown'
-                      } (${prediction.risk_percentage?.toFixed(1)}%). Ask me anything about your eye health or what you can do to improve it!`
-                    : undefined
-                }
-              />
-            </div>
           </div>
         ) : (
-          /* ── Zero-prediction state: logs exist but no prediction row yet ── */
-          <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 p-10 text-center space-y-4">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mx-auto">
-              <AlertCircle className="w-7 h-7 text-primary" />
+          /* ── No prediction yet ──────────────────────────────────── */
+          <div className="rounded-xl border-2 border-dashed border-border bg-card/40 p-10 text-center space-y-4">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[#f97316]/10 mx-auto">
+              <AlertCircle className="w-7 h-7 text-[#f97316]" />
             </div>
             <div>
               <h3 className="text-lg font-semibold text-foreground">No prediction yet</h3>
@@ -549,12 +319,7 @@ export default function DashboardPage() {
                 Your log was saved but a risk score hasn't been generated. Submit today's log to get your first prediction.
               </p>
             </div>
-            <Button
-              variant="primary"
-              size="lg"
-              onClick={() => router.push('/daily-log')}
-              className="inline-flex items-center gap-2"
-            >
+            <Button variant="primary" size="lg" onClick={() => router.push('/daily-log')} className="inline-flex items-center gap-2">
               <Clock className="w-4 h-4" />
               Log Today's Data
             </Button>

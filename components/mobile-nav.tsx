@@ -3,19 +3,15 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard,
-  Eye,
-  BarChart3,
-  AlertCircle,
-  Settings,
+  LayoutDashboard, Eye, BarChart3, AlertCircle, Bot,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { label: 'Home',       href: '/dashboard',        icon: LayoutDashboard },
-  { label: 'Log',        href: '/daily-log',         icon: Eye },
-  { label: 'Analytics',  href: '/analytics',         icon: BarChart3 },
-  { label: 'Risk',       href: '/risk-prediction',   icon: AlertCircle },
-  { label: 'Settings',   href: '/settings',          icon: Settings },
+  { label: 'Home',      href: '/dashboard',       icon: LayoutDashboard },
+  { label: 'Log',       href: '/daily-log',        icon: Eye },
+  { label: 'Analytics', href: '/analytics',        icon: BarChart3 },
+  { label: 'Risk',      href: '/risk-prediction',  icon: AlertCircle },
+  { label: 'AI',        href: '/ai-assistant',     icon: Bot },
 ];
 
 export function MobileNav() {
@@ -34,13 +30,10 @@ export function MobileNav() {
               key={href}
               href={href}
               className={`flex-1 flex flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors relative ${
-                isActive
-                  ? 'text-primary'
-                  : 'text-muted-foreground hover:text-foreground'
+                isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
               }`}
               aria-current={isActive ? 'page' : undefined}
             >
-              {/* Active top indicator */}
               {isActive && (
                 <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-primary rounded-full" />
               )}
@@ -50,7 +43,6 @@ export function MobileNav() {
           );
         })}
       </div>
-      {/* Safe-area padding for iOS home indicator */}
       <div className="h-safe-bottom bg-card" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} />
     </nav>
   );
