@@ -1,9 +1,7 @@
 'use client';
 
-import { Calendar, Download, TrendingUp, Eye, BarChart3 } from 'lucide-react';
+import { Download, TrendingUp, Eye, BarChart3 } from 'lucide-react';
 import { MainLayout } from '@/components/main-layout';
-import { ChartCard, MetricCard } from '@/components/dashboard-card';
-import { Button, SelectField } from '@/components/form-components';
 import { createClient } from '@/lib/supabase/client';
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -80,17 +78,17 @@ export default function AnalyticsPage() {
   const filteredLogs = useMemo(() => allLogs.slice(-days), [allLogs, days]);
 
   // Build chart points
-  const chartPoints = useMemo(() =>
-    filteredLogs.map((log: any) => {
-      const pred = predMap[log.id];
-      return {
-        label: formatDateLabel(log.date),
-        date: log.date,
-        eyeStrain: pred ? Number(pred.risk_percentage) : 0,
-        fatigue: pred ? Math.min(Number(pred.fatigue_score) * 10, 100) : 0,
-        screenTime: Number(log.screen_time) || 0,
-      };
-    }), [filteredLogs, predMap]);
+  const chartPoints = useMemo(() => filteredLogs.flatMap((log: any) => {
+    const pred = predMap[log.id];
+    if (!pred) return [];
+    return [{
+      label: formatDateLabel(log.date),
+      date: log.date,
+      eyeStrain: Number(pred.risk_percentage),
+      fatigue: Math.min(Number(pred.fatigue_score) * 10, 100),
+      screenTime: Number(log.screen_time) || 0,
+    }];
+  }), [filteredLogs, predMap]);
 
   // Derived analytics
   const analytics = useMemo(() => {
@@ -98,7 +96,6 @@ export default function AnalyticsPage() {
     const n = filteredLogs.length;
     const avgScreenTime = filteredLogs.reduce((s: number, l: any) => s + (l.screen_time || 0), 0) / n;
     const totalHours = filteredLogs.reduce((s: number, l: any) => s + (l.screen_time || 0), 0);
-    const avgBreaks = filteredLogs.reduce((s: number, l: any) => s + (l.breaks_taken || 0), 0) / n;
 
     const eyeStrainCount = filteredLogs.filter((l: any) => l.eye_strain === 1).length;
     const headachesCount = filteredLogs.filter((l: any) => l.headaches === 1).length;
@@ -114,68 +111,75 @@ export default function AnalyticsPage() {
 
     const riskValues = chartPoints.map(p => p.eyeStrain);
     const firstRisk = riskValues[0] ?? 0;
+    const previousRisk = riskValues[riskValues.length - 2] ?? null;
     const lastRisk = riskValues[riskValues.length - 1] ?? 0;
-    const trendDirection = lastRisk < firstRisk - 5 ? 'Improving' : lastRisk > firstRisk + 5 ? 'Worsening' : 'Stable';
+    const riskTrend = riskValues.length < 2
+      ? 'Insufficient data'
+      : lastRisk < (previousRisk as number) - 5 ? 'Improving'
+      : lastRisk > (previousRisk as number) + 5 ? 'Worsening'
+      : 'Stable';
 
     const topSymptomEntry = Object.entries(symptomFrequency).sort((a, b) => b[1] - a[1])[0];
 
     return {
       averageScreenTime: parseFloat(avgScreenTime.toFixed(1)),
       totalHours: parseFloat(totalHours.toFixed(1)),
-      averageBreaks: Math.round(avgBreaks),
-      trendDirection,
-      improving: trendDirection === 'Improving',
+      trendDirection: riskTrend,
+      improving: riskTrend === 'Improving',
       symptomFrequency,
       topSymptom: topSymptomEntry,
       firstRisk,
+      previousRisk,
       lastRisk,
     };
   }, [filteredLogs, chartPoints]);
 
-  // Export as CSV
-  const handleExport = () => {
+  // Export as XLSX — user's own logs, same format as admin export
+  const handleExport = async () => {
     if (filteredLogs.length === 0) return;
-    const boolToYesNo = (v: any) => v === 1 || v === true ? 'Yes' : 'No';
-    // Prefix date with a tab to prevent Excel auto-formatting as date
+
+    const { generateXlsx } = await import('@/lib/xlsx-export');
+    type XlsxColumn = import('@/lib/xlsx-export').XlsxColumn;
+
+    const boolToYesNo = (v: any) => (v === 1 || v === true ? 'Yes' : 'No');
     const formatDate = (d: string) => {
       if (!d) return '';
       const [y, m, day] = d.split('-');
-      return `${m}-${day}-${y}`;
+      return `${m}/${day}/${y}`;
     };
-    const headers = [
-      'Date',
-      'Screen Time (hours)',
-      'Sleep Hours',
-      'Brightness (%)',
-      'Breaks Taken',
-      'Eye Strain',
-      'Headaches',
-      'Dry Eyes',
-      'Blurry Vision',
-      'Risk Level',
+
+    const columns: XlsxColumn[] = [
+      { header: 'Date',               key: 'Date',               width: 12 },
+      { header: 'Screen Time (hrs)',  key: 'Screen Time (hours)', width: 16 },
+      { header: 'Sleep Hours',        key: 'Sleep Hours',         width: 12 },
+      { header: 'Brightness (%)',     key: 'Brightness (%)',      width: 14 },
+      { header: 'Breaks Taken',       key: 'Breaks Taken',        width: 13 },
+      { header: 'Eye Strain',         key: 'Eye Strain',          width: 11 },
+      { header: 'Headaches',          key: 'Headaches',           width: 11 },
+      { header: 'Dry Eyes',           key: 'Dry Eyes',            width: 10 },
+      { header: 'Blurry Vision',      key: 'Blurry Vision',       width: 13 },
+      { header: 'Risk Level',         key: 'Risk Level',          width: 12 },
     ];
-    const rows = filteredLogs.map((l: any) => [
-      formatDate(l.date),
-      l.screen_time ?? '',
-      l.sleep_hours ?? '',
-      l.brightness ?? '',
-      l.breaks_taken ?? 0,
-      boolToYesNo(l.eye_strain),
-      boolToYesNo(l.headaches),
-      boolToYesNo(l.dry_eyes),
-      boolToYesNo(l.blurry_vision),
-      l.risk_level ?? '',
-    ]);
-    const escapeField = (v: any) => {
-      const s = String(v ?? '');
-      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const csv = [headers, ...rows].map(row => row.map(escapeField).join(',')).join('\r\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `eyeguard-my-data-${timeRange}.csv`;
+
+    const rows = filteredLogs.map((l: any) => ({
+      'Date':               formatDate(l.date),
+      'Screen Time (hours)': l.screen_time ?? '',
+      'Sleep Hours':         l.sleep_hours ?? '',
+      'Brightness (%)':      l.brightness  ?? '',
+      'Breaks Taken':        l.breaks_taken ?? 0,
+      'Eye Strain':          boolToYesNo(l.eye_strain),
+      'Headaches':           boolToYesNo(l.headaches),
+      'Dry Eyes':            boolToYesNo(l.dry_eyes),
+      'Blurry Vision':       boolToYesNo(l.blurry_vision),
+      'Risk Level':          l.risk_level ?? '',
+    }));
+
+    const xlsx = generateXlsx(rows, columns, 'My Eye Health Data');
+    const blob = new Blob([xlsx], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `eyeguard-my-data-${timeRange}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -198,7 +202,7 @@ export default function AnalyticsPage() {
   if (!hasData) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center min-h-96 rounded-lg border-2 border-dashed border-border bg-muted/30 m-4 md:m-8">
+        <div className="flex items-center justify-center min-h-96 rounded-2xl border-2 border-dashed border-border bg-card/40 m-4 md:m-8">
           <div className="text-center space-y-4 p-8">
             <div className="inline-block p-4 bg-primary/10 rounded-full">
               <Eye className="w-12 h-12 text-primary" />
@@ -221,149 +225,221 @@ export default function AnalyticsPage() {
 
   return (
     <MainLayout>
-      <div className="space-y-8">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="min-h-[calc(100vh-7rem)] w-full max-w-6xl mx-auto space-y-6 rounded-[2rem]
+        bg-[radial-gradient(circle_at_8%_0%,rgba(249,115,22,0.08),transparent_30%),linear-gradient(160deg,rgba(251,191,100,0.10),rgba(249,115,22,0.04)_50%,rgba(180,100,30,0.06))]
+        dark:bg-[radial-gradient(circle_at_8%_0%,rgba(249,115,22,0.14),transparent_32%),linear-gradient(135deg,rgba(67,28,12,0.45),rgba(15,10,7,0.08)_52%,rgba(120,53,15,0.12))]
+        px-4 py-6 sm:px-8 sm:py-10">
+
+        {/* ── CONTAINER 1 — Header · Metrics · Chart ── */}
+        <div className="rounded-2xl border border-border bg-card/60 p-6 space-y-6">
+
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-border pb-5">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#f97316]">Personal health overview</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground mt-1">Analytics & Insights</h1>
+              <p className="text-muted-foreground text-sm mt-1">Analyse your eye health trends over time</p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+              <select
+                value={timeRange}
+                onChange={(e) => setTimeRange(e.target.value)}
+                className="px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="7days">Last 7 days</option>
+                <option value="30days">Last 30 days</option>
+                <option value="90days">Last 90 days</option>
+              </select>
+              <button
+                onClick={handleExport}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all
+                  bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/25
+                  hover:from-amber-400 hover:to-orange-400 hover:shadow-orange-400/35 hover:scale-[1.02]
+                  dark:from-amber-600 dark:to-orange-600"
+              >
+                <Download className="w-4 h-4" />
+                Export Report
+              </button>
+            </div>
+          </div>
+
+          {/* Summary Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="rounded-xl border border-border bg-background/60 p-4">
+              <p className="text-xs text-muted-foreground mb-1">Average Daily Screen Time</p>
+              <p className="text-2xl font-bold text-foreground">{analytics?.averageScreenTime || 0}<span className="text-sm font-normal text-muted-foreground ml-1">hours</span></p>
+            </div>
+            <div className="rounded-xl border border-border bg-background/60 p-4">
+              <p className="text-xs text-muted-foreground mb-1">Total Hours This Period</p>
+              <p className="text-2xl font-bold text-foreground">{analytics?.totalHours || 0}<span className="text-sm font-normal text-muted-foreground ml-1">hours</span></p>
+              <p className="text-xs text-muted-foreground mt-0.5">Over {filteredLogs.length} logged day{filteredLogs.length !== 1 ? 's' : ''}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-background/60 p-4">
+              <p className="text-xs text-muted-foreground mb-1">Trend Direction</p>
+              <p className={`text-2xl font-bold ${
+                analytics?.trendDirection === 'Improving' ? 'text-green-600 dark:text-green-400' :
+                analytics?.trendDirection === 'Worsening' ? 'text-red-600 dark:text-red-400' :
+                'text-yellow-600 dark:text-yellow-400'
+              }`}>{analytics?.trendDirection || 'Stable'}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {analytics?.trendDirection === 'Improving' ? 'Lower than previous log' :
+                 analytics?.trendDirection === 'Worsening' ? 'Higher than previous log' :
+                 analytics?.trendDirection === 'Insufficient data' ? 'Need more predictions' : 'Similar to previous log'}
+              </p>
+            </div>
+          </div>
+
+          {/* Chart */}
           <div>
-            <h1 className="text-3xl md:text-4xl font-bold text-foreground">Analytics & Insights</h1>
-            <p className="text-muted-foreground mt-2">Analyze your eye health trends over time</p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-            <SelectField
-              options={[
-                { value: '7days', label: 'Last 7 days' },
-                { value: '30days', label: 'Last 30 days' },
-                { value: '90days', label: 'Last 90 days' },
-              ]}
-              value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value)}
-            />
-            <Button variant="outline" size="lg" onClick={handleExport} className="w-full sm:w-auto">
-              <Download className="w-5 h-5 mr-2" />
-              Export Report
-            </Button>
-          </div>
-        </div>
-
-        {/* Summary Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <MetricCard title="Average Daily Screen Time" value={analytics?.averageScreenTime || 0} unit="hours" icon={<Calendar className="w-6 h-6 text-primary" />} />
-          <MetricCard
-            title="Total Hours This Period"
-            value={analytics?.totalHours || 0}
-            unit="hours"
-            description={`Over ${filteredLogs.length} logged day${filteredLogs.length !== 1 ? 's' : ''}`}
-            icon={<TrendingUp className="w-6 h-6 text-secondary" />}
-          />
-          <MetricCard title="Average Breaks/Day" value={analytics?.averageBreaks || 0} icon={<Calendar className="w-6 h-6 text-accent" />} />
-          <MetricCard
-            title="Trend Direction"
-            value={analytics?.trendDirection || 'Stable'}
-            description={analytics?.trendDirection === 'Improving' ? 'Risk decreasing' : analytics?.trendDirection === 'Worsening' ? 'Risk increasing' : 'Consistent health metrics'}
-            icon={<TrendingUp className={`w-6 h-6 ${analytics?.trendDirection === 'Improving' ? 'text-green-600' : analytics?.trendDirection === 'Worsening' ? 'text-destructive' : 'text-yellow-600'}`} />}
-          />
-        </div>
-
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ChartCard title="Eye Strain Risk Trend" description={`${days}-day trend`}>
+            <p className="text-sm font-semibold text-foreground mb-1">Risk and Fatigue Over Time</p>
+            <p className="text-xs text-muted-foreground mb-4">{days}-day trend · missing predictions excluded</p>
             <div className="h-64">
               {chartPoints.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-muted-foreground text-sm">No data for this range</div>
+                <div className="h-full flex items-center justify-center text-muted-foreground text-sm">No predictions for this range</div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartPoints} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} domain={[0, 100]} unit="%" width={36} />
-                    <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Eye Strain Risk']} contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--foreground)' }} />
+                    <Tooltip
+                      formatter={(v: number, name: string) => [`${v.toFixed(1)}%`, name === 'eyeStrain' ? 'Risk' : 'Fatigue (×10)']}
+                      contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--foreground)' }}
+                    />
                     <Line type="monotone" dataKey="eyeStrain" stroke="#ef4444" strokeWidth={2} dot={{ r: 3, fill: '#ef4444' }} activeDot={{ r: 5 }} />
+                    <Line type="monotone" dataKey="fatigue" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               )}
             </div>
-          </ChartCard>
-
-          <ChartCard title="Fatigue Index Trend" description={`${days}-day trend`}>
-            <div className="h-64">
-              {chartPoints.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-muted-foreground text-sm">No data for this range</div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartPoints} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                    <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} domain={[0, 100]} unit="%" width={36} />
-                    <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Fatigue Index']} contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--foreground)' }} />
-                    <Line type="monotone" dataKey="fatigue" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3, fill: '#f59e0b' }} activeDot={{ r: 5 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
+            <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-red-500 rounded" /> Risk %</div>
+              <div className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-yellow-500 rounded" style={{ backgroundImage: 'repeating-linear-gradient(to right, #f59e0b 0, #f59e0b 4px, transparent 4px, transparent 6px)' }} /> Fatigue ×10</div>
             </div>
-          </ChartCard>
+          </div>
         </div>
 
-        {/* Symptom Frequency */}
-        <ChartCard title="Symptom Frequency Analysis">
+        {/* ── CONTAINER 2 — Symptom Frequency + What They May Indicate ── */}
+        <div className="rounded-2xl border border-border bg-card/60 p-6 space-y-6">
+          <div className="border-b border-border pb-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#f97316]">Symptom tracking</p>
+            <h2 className="text-xl font-bold text-foreground mt-1">Symptom Frequency Analysis</h2>
+          </div>
+
+          {/* Frequency bars */}
           <div className="space-y-4">
             {analytics && Object.entries(analytics.symptomFrequency).map(([symptom, frequency]) => (
-              <div key={symptom} className="space-y-2">
+              <div key={symptom} className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-foreground">{symptom}</span>
-                  <span className="text-sm font-semibold text-primary">{frequency as number}%</span>
+                  <span className="text-sm font-bold text-primary">{frequency as number}%</span>
                 </div>
                 <div className="h-2 rounded-full bg-muted overflow-hidden">
-                  <div className="h-full bg-primary transition-all" style={{ width: `${frequency}%` }} />
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      (frequency as number) >= 60 ? 'bg-red-500' :
+                      (frequency as number) >= 30 ? 'bg-yellow-500' : 'bg-green-500'
+                    }`}
+                    style={{ width: `${frequency}%` }}
+                  />
                 </div>
               </div>
             ))}
           </div>
-        </ChartCard>
 
-        {/* Key Insights */}
-        <ChartCard title="Key Insights">
-          <div className="space-y-4">
-            {analytics && (
-              <>
-                <div className={`p-4 rounded-lg border ${
-                  analytics.improving ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800' :
-                  analytics.trendDirection === 'Worsening' ? 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800' :
-                  'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800'
-                }`}>
-                  <p className={`text-sm font-semibold ${analytics.improving ? 'text-green-900 dark:text-green-100' : analytics.trendDirection === 'Worsening' ? 'text-yellow-900 dark:text-yellow-100' : 'text-blue-900 dark:text-blue-100'}`}>
-                    {analytics.improving ? '✓ Improving Trend' : analytics.trendDirection === 'Worsening' ? '⚠ Worsening Trend' : '→ Stable Trend'}
-                  </p>
-                  <p className={`text-sm mt-2 ${analytics.improving ? 'text-green-800 dark:text-green-200' : analytics.trendDirection === 'Worsening' ? 'text-yellow-800 dark:text-yellow-200' : 'text-blue-800 dark:text-blue-200'}`}>
-                    {analytics.improving ? 'Your risk level has improved compared to your earliest logged entry. Keep up the good habits.' :
-                     analytics.trendDirection === 'Worsening' ? 'Your risk level has increased. Consider reducing screen time and taking more breaks.' :
-                     'Your risk level has been consistent across this period.'}
-                  </p>
+          {/* What they indicate */}
+          <div className="border-t border-border pt-5">
+            <p className="text-sm font-semibold text-foreground mb-3">What These Symptoms May Indicate</p>
+            <p className="text-xs text-muted-foreground mb-4">Common screen-use contributors — not a diagnosis</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                ['Eye Strain',    'Often associated with prolonged near focus, glare, small text, or infrequent blinking.'],
+                ['Headaches',     'May be linked to visual effort, glare, poor viewing distance, posture, dehydration, or insufficient sleep.'],
+                ['Dry Eyes',      'Commonly associated with reduced blinking during screen use, airflow, low humidity, or contact-lens irritation.'],
+                ['Blurry Vision', 'Can occur with prolonged focusing, uncorrected vision needs, fatigue, or temporary tear-film instability.'],
+              ].map(([symptom, explanation]) => (
+                <div key={symptom} className="rounded-xl border border-border bg-background/60 p-4">
+                  <p className="text-sm font-semibold text-foreground">{symptom}</p>
+                  <p className="text-xs leading-relaxed text-muted-foreground mt-1.5">{explanation}</p>
                 </div>
-
-                {analytics.topSymptom && analytics.topSymptom[1] > 0 && (
-                  <div className="p-4 rounded-lg bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800">
-                    <p className="text-sm font-semibold text-yellow-900 dark:text-yellow-100">⚠ Most Frequent Symptom</p>
-                    <p className="text-sm text-yellow-800 dark:text-yellow-200 mt-2">
-                      {analytics.topSymptom[0]} appears in {analytics.topSymptom[1]}% of your logs.
-                      {analytics.topSymptom[0] === 'Dry Eyes' ? ' Consider using lubricating eye drops and a humidifier.' : ''}
-                      {analytics.topSymptom[0] === 'Eye Strain' ? ' Try the 20-20-20 rule and adjust your monitor distance.' : ''}
-                      {analytics.topSymptom[0] === 'Headaches' ? ' Check your monitor position and reduce glare.' : ''}
-                      {analytics.topSymptom[0] === 'Blurry Vision' ? ' Take more frequent breaks and consider an eye exam.' : ''}
-                    </p>
-                  </div>
-                )}
-
-                <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
-                  <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">💡 Based on Your Data</p>
-                  <p className="text-sm text-blue-800 dark:text-blue-200 mt-2">
-                    Your average screen time is {analytics.averageScreenTime}h/day with {analytics.averageBreaks} break{analytics.averageBreaks !== 1 ? 's' : ''} on average.
-                    {analytics.averageScreenTime > 8 ? ' This exceeds the recommended 8-hour limit — consider scheduling more breaks.' : ' This is within a manageable range.'}
-                  </p>
-                </div>
-              </>
-            )}
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-4 border-t border-border pt-4">
+              These are possible contributors, not proof of a medical condition. Persistent, severe, or worsening symptoms should be assessed by a licensed eye-care professional.
+            </p>
           </div>
-        </ChartCard>
+        </div>
+
+        {/* ── CONTAINER 3 — Key Insights ── */}
+        <div className="rounded-2xl border border-border bg-card/60 p-6 space-y-4">
+          <div className="border-b border-border pb-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#f97316]">Personalised summary</p>
+            <h2 className="text-xl font-bold text-foreground mt-1">Key Insights</h2>
+          </div>
+
+          {analytics && (
+            <div className="space-y-3">
+              {/* Trend insight */}
+              <div className={`p-4 rounded-xl border ${
+                analytics.improving
+                  ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800'
+                  : analytics.trendDirection === 'Worsening'
+                  ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
+                  : 'bg-[#f97316]/5 border-[#f97316]/20'
+              }`}>
+                <p className={`text-sm font-semibold ${
+                  analytics.improving ? 'text-green-700 dark:text-green-300' :
+                  analytics.trendDirection === 'Worsening' ? 'text-red-700 dark:text-red-300' :
+                  'text-[#f97316]'
+                }`}>
+                  {analytics.improving ? '✓ Improving Trend'
+                    : analytics.trendDirection === 'Worsening' ? '⚠ Worsening Trend'
+                    : analytics.trendDirection === 'Insufficient data' ? '→ More Data Needed'
+                    : '→ Stable Trend'}
+                </p>
+                <p className={`text-sm mt-1.5 ${
+                  analytics.improving ? 'text-green-700 dark:text-green-400' :
+                  analytics.trendDirection === 'Worsening' ? 'text-red-700 dark:text-red-400' :
+                  'text-muted-foreground'
+                }`}>
+                  {analytics.improving
+                    ? 'Your risk level has improved compared to your earliest logged entry. Keep up the good habits.'
+                    : analytics.trendDirection === 'Worsening'
+                    ? 'Your risk level has increased. Consider reducing screen time and taking more breaks.'
+                    : analytics.trendDirection === 'Insufficient data'
+                    ? 'Log more days with predictions to identify a reliable trend.'
+                    : 'Your risk level has been consistent across this period.'}
+                </p>
+              </div>
+
+              {/* Top symptom */}
+              {analytics.topSymptom && analytics.topSymptom[1] > 0 && (
+                <div className="p-4 rounded-xl bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800">
+                  <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-300">⚠ Most Frequent Symptom</p>
+                  <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1.5">
+                    <strong>{analytics.topSymptom[0]}</strong> appears in {analytics.topSymptom[1]}% of your logs.
+                    {analytics.topSymptom[0] === 'Dry Eyes'      ? ' Consider using lubricating eye drops and a humidifier.' : ''}
+                    {analytics.topSymptom[0] === 'Eye Strain'    ? ' Try the 20-20-20 rule and adjust your monitor distance.' : ''}
+                    {analytics.topSymptom[0] === 'Headaches'     ? ' Check your monitor position and reduce glare.' : ''}
+                    {analytics.topSymptom[0] === 'Blurry Vision' ? ' Take more frequent breaks and consider an eye exam.' : ''}
+                  </p>
+                </div>
+              )}
+
+              {/* Screen time */}
+              <div className="p-4 rounded-xl bg-[#f97316]/5 border border-[#f97316]/20">
+                <p className="text-sm font-semibold text-[#f97316]">💡 Based on Your Data</p>
+                <p className="text-sm text-muted-foreground mt-1.5">
+                  Your average screen time is <strong className="text-foreground">{analytics.averageScreenTime}h/day</strong>.{' '}
+                  {analytics.averageScreenTime > 8
+                    ? 'This exceeds the recommended 8-hour limit — consider scheduling screen-free recovery time.'
+                    : 'This is within a manageable range. Keep maintaining healthy screen habits.'}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
       </div>
     </MainLayout>
   );

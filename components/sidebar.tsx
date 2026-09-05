@@ -7,22 +7,20 @@ import { useTheme } from 'next-themes';
 import Image from 'next/image';
 import {
   LayoutDashboard, BarChart3, Settings, LogOut,
-  TrendingUp, AlertCircle, ShieldCheck, Sun, Moon,
-  FlaskConical, Eye, Bot, CalendarCheck,
+  AlertCircle, ShieldCheck, Sun, Moon,
+  Bot, CalendarCheck,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { isAdmin } from '@/lib/admin-guard';
+import { LogoutDialog } from './logout-dialog';
 
 const navItems = [
   { label: 'Dashboard',       href: '/dashboard',       icon: LayoutDashboard, category: 'main' },
   { label: 'Analytics',       href: '/analytics',       icon: BarChart3,       category: 'main' },
   { label: 'Risk Prediction', href: '/risk-prediction', icon: AlertCircle,     category: 'main' },
   { label: 'Daily Log',       href: '/daily-log',       icon: CalendarCheck,   category: 'main' },
-  { label: 'AI Assistant',    href: '/ai-assistant',    icon: Bot,             category: 'main' },
-  { label: 'Trends',          href: '/trends',          icon: TrendingUp,      category: 'more' },
-  { label: 'Factor Analysis', href: '/factor-analysis', icon: FlaskConical,    category: 'more' },
+  { label: 'AI Assistant',  href: '/ai-assistant',    icon: Bot,             category: 'main' },
   { label: 'Settings',        href: '/settings',        icon: Settings,        category: 'bottom' },
-  { label: 'Support',         href: '/settings#support',icon: Eye,             category: 'bottom' },
 ];
 
 interface SidebarProps {
@@ -38,6 +36,8 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const [user, setUser] = useState<{ email: string; displayName: string } | null>(null);
   const [isAdminUser, setIsAdminUser] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showLogout, setShowLogout] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -60,12 +60,12 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   }, [supabase]);
 
   const handleLogout = async () => {
+    setLoggingOut(true);
     await supabase.auth.signOut();
-    router.push('/login');
+    router.push('/');
   };
 
   const mainItems   = navItems.filter(i => i.category === 'main');
-  const moreItems   = navItems.filter(i => i.category === 'more');
   const bottomItems = navItems.filter(i => i.category === 'bottom');
 
   const NavLink = ({ label, href, icon: Icon }: { label: string; href: string; icon: typeof LayoutDashboard }) => {
@@ -95,20 +95,24 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
       {isOpen && (
         <div className="fixed inset-0 bg-black/60 z-30 md:hidden" onClick={onClose} aria-hidden="true" />
       )}
-
       <aside className={`fixed left-0 top-0 h-screen w-64 bg-sidebar border-r border-sidebar-border flex flex-col z-40 transition-transform duration-300 md:relative md:z-0 ${
         isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
       }`}>
 
         {/* Logo */}
         <div className="px-5 py-5 border-b border-sidebar-border">
-          <div className="flex items-center gap-3">
-            <Image src="/eyeguard-logo.svg" alt="EyeGuard" width={34} height={34} />
-            <div>
-              <h1 className="font-bold text-sidebar-foreground text-sm leading-none">EyeGuard</h1>
-              <p className="text-[10px] text-sidebar-primary mt-0.5 uppercase tracking-wider font-semibold">Precision Monitoring</p>
-            </div>
-          </div>
+          <Link href="/dashboard" className="flex items-center gap-2.5" onClick={onClose}>
+            <Image
+              src="/logo-mark.png"
+              alt="EyeGuard"
+              width={32}
+              height={32}
+              className="h-8 w-8 object-contain"
+            />
+            <span className="font-bold text-sidebar-foreground text-sm">
+              Eye<span className="text-primary">Guard</span>
+            </span>
+          </Link>
         </div>
 
         {/* Nav */}
@@ -116,14 +120,6 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
           {/* Main */}
           <div className="space-y-0.5">
             {mainItems.map(item => <NavLink key={item.href} {...item} />)}
-          </div>
-
-          {/* More */}
-          <div>
-            <p className="px-3 mb-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">More</p>
-            <div className="space-y-0.5">
-              {moreItems.map(item => <NavLink key={item.href} {...item} />)}
-            </div>
           </div>
 
           {/* Log Today CTA */}
@@ -180,7 +176,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
               </div>
               <button
-                onClick={handleLogout}
+                onClick={() => setShowLogout(true)}
                 className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
                 aria-label="Logout"
               >
@@ -190,6 +186,13 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
           )}
         </div>
       </aside>
+
+      <LogoutDialog
+        open={showLogout}
+        onConfirm={handleLogout}
+        onCancel={() => setShowLogout(false)}
+        isLoading={loggingOut}
+      />
     </>
   );
 }

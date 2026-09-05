@@ -2,7 +2,7 @@
   <!-- Shield shape -->
   <path d="M50 4 L88 18 L88 52 C88 72 70 88 50 96 C30 88 12 72 12 52 L12 18 Z" fill="url(#shieldGrad)" stroke="url(#shieldStroke)" stroke-width="1.5"/>
   <!-- Inner shield glow -->
-  <path d="M50 12 L80 23 L80 52 C80 68 65 81 50 88 C35 81 20 68 20 52 L20 23 Z" fill="url(#innerShield)" opacity="0.4"/>
+  <path d="M50 12 L80 23 L80 52 C80 68 65 81 50 88 C35 81 20 68 20 52 L20 23 Z" fill="url(#innerShield)" opacity="0.45"/>
   <!-- Eye white -->
   <ellipse cx="50" cy="52" rx="20" ry="14" fill="white" opacity="0.95"/>
   <!-- Iris -->
@@ -14,32 +14,32 @@
   <!-- Plus sign -->
   <rect x="62" y="58" width="10" height="3" rx="1.5" fill="url(#plusGrad)"/>
   <rect x="65.5" y="54.5" width="3" height="10" rx="1.5" fill="url(#plusGrad)"/>
-  <!-- Pixel dots -->
-  <rect x="74" y="54" width="5" height="5" rx="1" fill="#38bdf8" opacity="0.8"/>
-  <rect x="74" y="61" width="5" height="5" rx="1" fill="#818cf8" opacity="0.6"/>
-  <rect x="81" y="57" width="4" height="4" rx="1" fill="#7c3aed" opacity="0.5"/>
+  <!-- Pixel dots (warm) -->
+  <rect x="74" y="54" width="5" height="5" rx="1" fill="#fb923c" opacity="0.85"/>
+  <rect x="74" y="61" width="5" height="5" rx="1" fill="#f97316" opacity="0.7"/>
+  <rect x="81" y="57" width="4" height="4" rx="1" fill="#ffb86b" opacity="0.6"/>
   <defs>
     <linearGradient id="shieldGrad" x1="12" y1="4" x2="88" y2="96" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#3b82f6"/>
-      <stop offset="50%" stop-color="#6366f1"/>
-      <stop offset="100%" stop-color="#a855f7"/>
+      <stop offset="0%" stop-color="#ffd8b5"/>
+      <stop offset="50%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#f97316"/>
     </linearGradient>
     <linearGradient id="shieldStroke" x1="12" y1="4" x2="88" y2="96" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#93c5fd"/>
-      <stop offset="100%" stop-color="#c4b5fd"/>
+      <stop offset="0%" stop-color="#ffefde"/>
+      <stop offset="100%" stop-color="#ffd5b0"/>
     </linearGradient>
     <linearGradient id="innerShield" x1="20" y1="12" x2="80" y2="88" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#bfdbfe"/>
-      <stop offset="100%" stop-color="#ddd6fe"/>
+      <stop offset="0%" stop-color="#fff3e8"/>
+      <stop offset="100%" stop-color="#ffedd8"/>
     </linearGradient>
     <radialGradient id="irisGrad" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#38bdf8"/>
-      <stop offset="40%" stop-color="#3b82f6"/>
-      <stop offset="100%" stop-color="#1e3a8a"/>
+      <stop offset="0%" stop-color="#ffb86b"/>
+      <stop offset="40%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#5b2b12"/>
     </radialGradient>
     <linearGradient id="plusGrad" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
-      <stop offset="0%" stop-color="#38bdf8"/>
-      <stop offset="100%" stop-color="#818cf8"/>
+      <stop offset="0%" stop-color="#ffb86b"/>
+      <stop offset="100%" stop-color="#fb923c"/>
     </linearGradient>
   </defs>
 </svg>

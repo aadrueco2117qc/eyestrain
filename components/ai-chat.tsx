@@ -25,7 +25,7 @@ export function AiChat({ mode, initialMessage }: AiChatProps) {
     role: 'assistant',
     content:
       initialMessage ??
-      "Hi! I'm EyeGuard AI 👋 I can answer your eye health questions and give personalized advice based on your data. What would you like to know?",
+      "Hi! I'm EyeGuard AI 👋 I can answer your eye health questions and give personalised advice based on your data. What would you like to know?",
   };
 
   const [messages, setMessages] = useState<Message[]>([defaultMsg]);
@@ -61,12 +61,11 @@ export function AiChat({ mode, initialMessage }: AiChatProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: trimmed, history: messages }),
       });
-
       const data = await res.json();
-      const reply = data.reply ?? (data.error ? `Error: ${data.error}` : 'Sorry, something went wrong. Please try again.');
+      const reply = data.reply ?? (data.error ? `Error: ${data.error}` : 'Sorry, something went wrong.');
       setMessages([...newMessages, { role: 'assistant', content: reply }]);
     } catch {
-      setMessages([...newMessages, { role: 'assistant', content: 'Connection error. Please check your internet and try again.' }]);
+      setMessages([...newMessages, { role: 'assistant', content: 'Connection error. Please try again.' }]);
     } finally {
       setIsLoading(false);
     }
@@ -79,29 +78,38 @@ export function AiChat({ mode, initialMessage }: AiChatProps) {
     }
   };
 
+  /* ── Shared chat body ── */
   const ChatBody = (
     <div className="flex flex-col h-full">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.map((msg, i) => (
-          <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${msg.role === 'assistant' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-              {msg.role === 'assistant' ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
+          <div key={i} className={`flex gap-2.5 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+            <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs ${
+              msg.role === 'assistant'
+                ? 'bg-[#f97316]/20 text-[#f97316]'
+                : 'bg-[#fff7ed]/10 text-[#fff7ed]/60'
+            }`}>
+              {msg.role === 'assistant' ? <Bot className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
             </div>
-            <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${msg.role === 'assistant' ? 'bg-muted text-foreground rounded-tl-sm' : 'bg-primary text-primary-foreground rounded-tr-sm'}`}>
+            <div className={`max-w-[82%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
+              msg.role === 'assistant'
+                ? 'bg-[#f97316]/8 text-[#fff7ed]/85 rounded-tl-sm border border-[#f97316]/10'
+                : 'bg-[#f97316] text-[#0f0a07] rounded-tr-sm font-medium'
+            }`}>
               {msg.content}
             </div>
           </div>
         ))}
 
         {isLoading && (
-          <div className="flex gap-3">
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-              <Bot className="w-4 h-4" />
+          <div className="flex gap-2.5">
+            <div className="flex-shrink-0 w-7 h-7 rounded-full bg-[#f97316]/20 text-[#f97316] flex items-center justify-center">
+              <Bot className="w-3.5 h-3.5" />
             </div>
-            <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Thinking…</span>
+            <div className="bg-[#f97316]/8 border border-[#f97316]/10 rounded-2xl rounded-tl-sm px-3.5 py-3 flex items-center gap-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#f97316]/60" />
+              <span className="text-xs text-[#fff7ed]/40">Thinking…</span>
             </div>
           </div>
         )}
@@ -110,9 +118,13 @@ export function AiChat({ mode, initialMessage }: AiChatProps) {
 
       {/* Suggested questions */}
       {messages.length === 1 && (
-        <div className="px-4 pb-2 flex flex-wrap gap-2">
+        <div className="px-4 pb-2 flex flex-wrap gap-1.5">
           {SUGGESTED_QUESTIONS.map((q) => (
-            <button key={q} onClick={() => sendMessage(q)} className="text-xs px-3 py-1.5 rounded-full border border-border bg-background hover:bg-muted transition-colors text-muted-foreground">
+            <button
+              key={q}
+              onClick={() => sendMessage(q)}
+              className="text-xs px-3 py-1.5 rounded-full border border-[#f97316]/15 bg-[#f97316]/5 hover:bg-[#f97316]/15 transition-colors text-[#fff7ed]/55 hover:text-[#fff7ed]"
+            >
               {q}
             </button>
           ))}
@@ -120,7 +132,7 @@ export function AiChat({ mode, initialMessage }: AiChatProps) {
       )}
 
       {/* Input */}
-      <div className="p-4 border-t border-border">
+      <div className="p-3 border-t border-[#f97316]/12">
         <div className="flex gap-2 items-end">
           <textarea
             ref={inputRef}
@@ -129,20 +141,20 @@ export function AiChat({ mode, initialMessage }: AiChatProps) {
             onKeyDown={handleKeyDown}
             placeholder="Ask about eye health…"
             rows={1}
-            className="flex-1 resize-none rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary max-h-32 overflow-y-auto"
-            style={{ minHeight: '42px' }}
+            className="flex-1 resize-none rounded-xl border border-[#f97316]/15 bg-[#fff7ed]/5 px-3.5 py-2.5 text-sm text-[#fff7ed] placeholder:text-[#fff7ed]/30 focus:outline-none focus:ring-2 focus:ring-[#f97316]/40 max-h-28 overflow-y-auto"
+            style={{ minHeight: '40px' }}
             disabled={isLoading}
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || isLoading}
-            aria-label="Send message"
-            className="flex-shrink-0 w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="Send"
+            className="flex-shrink-0 w-9 h-9 rounded-xl bg-[#f97316] text-[#0f0a07] flex items-center justify-center hover:bg-[#fb923c] transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
           >
-            <Send className="w-4 h-4" />
+            <Send className="w-3.5 h-3.5" />
           </button>
         </div>
-        <p className="text-xs text-muted-foreground mt-2 text-center">
+        <p className="text-[10px] text-[#fff7ed]/25 mt-2 text-center">
           AI advice is informational only — not a substitute for medical care.
         </p>
       </div>
@@ -152,18 +164,19 @@ export function AiChat({ mode, initialMessage }: AiChatProps) {
   /* ── INLINE MODE ── */
   if (mode === 'inline') {
     return (
-      <div className="border border-border rounded-xl overflow-hidden flex flex-col h-[480px]">
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card">
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-            <Bot className="w-4 h-4 text-primary-foreground" />
+      <div className="border border-[#f97316]/15 bg-[#f97316]/[0.03] rounded-xl overflow-hidden flex flex-col h-[480px]">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-[#f97316]/12 bg-[#f97316]/5">
+          <div className="w-8 h-8 rounded-full bg-[#f97316]/20 flex items-center justify-center">
+            <Bot className="w-4 h-4 text-[#f97316]" />
           </div>
           <div>
             <p className="text-sm font-semibold text-foreground">EyeGuard AI</p>
-            <p className="text-xs text-muted-foreground">Personalized eye health assistant</p>
+            <p className="text-xs text-[#fff7ed]/40">Eye health assistant</p>
           </div>
           <div className="ml-auto flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-green-500" />
-            <span className="text-xs text-muted-foreground">Online</span>
+            <span className="w-2 h-2 rounded-full bg-green-400" />
+            <span className="text-xs text-[#fff7ed]/40">Online</span>
           </div>
         </div>
         {ChatBody}
@@ -174,34 +187,51 @@ export function AiChat({ mode, initialMessage }: AiChatProps) {
   /* ── BUBBLE MODE ── */
   return (
     <>
+      {/* Chat popup */}
       {isOpen && (
         <div
-          className="fixed bottom-20 right-4 z-50 w-[360px] max-w-[calc(100vw-2rem)] h-[500px] max-h-[calc(100vh-6rem)] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+          className="fixed bottom-20 right-5 z-50 w-[360px] max-w-[calc(100vw-2.5rem)] h-[520px] max-h-[calc(100vh-6rem)] bg-[#1a1008] border border-[#f97316]/20 rounded-2xl shadow-2xl shadow-black/60 flex flex-col overflow-hidden"
           role="dialog"
           aria-label="EyeGuard AI chat"
         >
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card flex-shrink-0">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-              <Bot className="w-4 h-4 text-primary-foreground" />
+          {/* Header */}
+          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-[#f97316]/12 bg-[#f97316]/5 flex-shrink-0">
+            <div className="w-8 h-8 rounded-full bg-[#f97316]/20 flex items-center justify-center">
+              <Bot className="w-4 h-4 text-[#f97316]" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-foreground">EyeGuard AI</p>
-              <p className="text-xs text-muted-foreground">Ask me anything about eye health</p>
+              <p className="text-sm font-semibold text-[#fff7ed]">EyeGuard AI</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                <span className="text-[10px] text-[#fff7ed]/40">Online · Eye health assistant</span>
+              </div>
             </div>
-            <button onClick={() => setIsOpen(false)} aria-label="Close chat" className="ml-auto p-1.5 hover:bg-muted rounded-lg transition-colors">
-              <X className="w-4 h-4 text-muted-foreground" />
+            <button
+              onClick={() => setIsOpen(false)}
+              aria-label="Close chat"
+              className="ml-auto p-1.5 hover:bg-[#fff7ed]/5 rounded-lg transition-colors text-[#fff7ed]/40 hover:text-[#fff7ed]/70"
+            >
+              <X className="w-4 h-4" />
             </button>
           </div>
           {ChatBody}
         </div>
       )}
 
+      {/* FAB button */}
       <button
-        onClick={() => setIsOpen((o) => !o)}
+        onClick={() => setIsOpen(o => !o)}
         aria-label={isOpen ? 'Close AI chat' : 'Open AI chat'}
-        className="fixed bottom-4 right-4 z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:opacity-90 transition-all hover:scale-105 active:scale-95"
+        className="fixed bottom-5 right-5 z-50 flex items-center justify-center w-13 h-13 rounded-full bg-gradient-to-br from-[#f97316] to-[#fb923c] text-[#0f0a07] shadow-lg shadow-[#f97316]/30 hover:opacity-90 hover:-translate-y-0.5 active:scale-95 transition-all"
+        style={{ width: '52px', height: '52px' }}
       >
-        {isOpen ? <Minimize2 className="w-5 h-5" /> : <MessageCircle className="w-6 h-6" />}
+        {isOpen
+          ? <Minimize2 className="w-5 h-5" />
+          : <MessageCircle className="w-5 h-5" />}
+        {/* online dot */}
+        {!isOpen && (
+          <span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-[#0f0a07]" />
+        )}
       </button>
     </>
   );

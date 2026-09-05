@@ -98,14 +98,14 @@ const STATUS_BADGE: Record<string, string> = {
 
 const STRENGTH_COLOR: Record<string, string> = {
   None:     'text-muted-foreground',
-  Weak:     'text-blue-500',
+  Weak:     'text-primary',
   Moderate: 'text-yellow-500',
   Strong:   'text-red-500',
 };
 
 const STRENGTH_BG: Record<string, string> = {
   None:     'bg-muted/50',
-  Weak:     'bg-blue-500/10',
+  Weak:     'bg-primary/10',
   Moderate: 'bg-yellow-500/20',
   Strong:   'bg-red-500/20',
 };
@@ -208,10 +208,10 @@ export default function FactorAnalysisPage() {
   return (
     <AuthGuard>
       <MainLayout>
-        <div className="space-y-8">
+        <div className="min-h-[calc(100vh-7rem)] w-full max-w-6xl mx-auto space-y-10 rounded-[2rem] bg-[radial-gradient(circle_at_8%_0%,rgba(249,115,22,0.08),transparent_30%),linear-gradient(160deg,rgba(251,191,100,0.10),rgba(249,115,22,0.04)_50%,rgba(180,100,30,0.06))] dark:bg-[radial-gradient(circle_at_8%_0%,rgba(249,115,22,0.14),transparent_32%),linear-gradient(135deg,rgba(67,28,12,0.45),rgba(15,10,7,0.08)_52%,rgba(120,53,15,0.12))] px-4 py-6 sm:px-8 sm:py-10">
 
           {/* ── Header ──────────────────────────────────────────────────── */}
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 border-b border-[#f97316]/15 pb-6">
             <div>
               <h1 className="text-4xl font-bold text-foreground">Factor Analysis</h1>
               <p className="text-muted-foreground mt-2">
@@ -415,13 +415,13 @@ export default function FactorAnalysisPage() {
                 </tbody>
               </table>
               <p className="text-xs text-muted-foreground mt-3">
-                Strength is based on how consistently changes in the factor align with changes in the symptom across your logged days.
-                <span className="ml-2 text-blue-500 font-medium">Weak</span>
-                <span className="mx-1">·</span>
-                <span className="text-yellow-500 font-medium">Moderate</span>
-                <span className="mx-1">·</span>
-                <span className="text-red-500 font-medium">Strong</span>
-              </p>
+                            Strength is based on how consistently changes in the factor align with changes in the symptom across your logged days.
+                            <span className="ml-2 text-primary font-medium">Weak</span>
+                            <span className="mx-1">·</span>
+                            <span className="text-yellow-500 font-medium">Moderate</span>
+                            <span className="mx-1">·</span>
+                            <span className="text-red-500 font-medium">Strong</span>
+                          </p>
             </div>
           </ChartCard>
 
@@ -466,7 +466,7 @@ export default function FactorAnalysisPage() {
                       contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--foreground)' }}
                     />
                     <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '12px' }} />
-                    <Line yAxisId="left"  type="monotone" dataKey="screenTime"   stroke="#6366f1" strokeWidth={2} dot={false} name="Screen Time (h)" />
+                    <Line yAxisId="left"  type="monotone" dataKey="screenTime"   stroke={'var(--color-primary)'} strokeWidth={2} dot={false} name="Screen Time (h)" />
                     <Line yAxisId="right" type="monotone" dataKey="eyeStrain"    stroke="#ef4444" strokeWidth={1.5} dot={false} name="Eye Strain" strokeDasharray="4 2" />
                     <Line yAxisId="right" type="monotone" dataKey="headaches"    stroke="#f97316" strokeWidth={1.5} dot={false} name="Headaches"  strokeDasharray="4 2" />
                     <Line yAxisId="right" type="monotone" dataKey="blurryVision" stroke="#eab308" strokeWidth={1.5} dot={false} name="Blurry Vision" strokeDasharray="4 2" />

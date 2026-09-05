@@ -8,8 +8,10 @@ export default function TermsOfServicePage() {
       {/* Nav */}
       <nav className="sticky top-0 z-50 flex items-center justify-between px-6 sm:px-10 py-4 border-b border-border bg-background/80 backdrop-blur-md">
         <div className="flex items-center gap-2.5">
-          <Image src="/eyeguard-logo.svg" alt="EyeGuard" width={30} height={30} />
-          <span className="text-base font-bold text-foreground">EyeGuard</span>
+          <Image src="/logo-mark.png" alt="EyeGuard" width={40} height={40} className="h-10 w-10 object-contain object-center" />
+          <span className="text-base font-bold">
+            <span className="text-foreground">Eye</span><span className="text-[#f97316]">Guard</span>
+          </span>
         </div>
         <Link href="/" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back
@@ -35,7 +37,16 @@ export default function TermsOfServicePage() {
             students at Our Lady of Fatima University.
           </Section>
 
-          <Section title="2. Nature of the Service">
+          <Section title="2. Privacy and Research Participation">
+            <p>
+              EyeGuard collects self-reported screen-time, symptom, sleep, profile, and derived risk information for the stated academic research and personal dashboard purposes. Health and education information may be sensitive personal information under the Philippines' Data Privacy Act of 2012 (Republic Act No. 10173). Participation is voluntary, and you may stop participating or request correction or deletion as described in the Privacy Policy.
+            </p>
+            <p className="mt-3 text-xs">
+              These Terms are written for this capstone application and are not legal advice. See the <a className="text-primary hover:underline" href="https://privacy.gov.ph/data-privacy-act/" target="_blank" rel="noreferrer">National Privacy Commission's Data Privacy Act text</a> for the primary legal source.
+            </p>
+          </Section>
+
+          <Section title="3. Nature of the Service">
             <p>
               EyeGuard is a <strong className="text-foreground">screening and awareness tool</strong>, not a
               medical device or clinical service. It uses the Computer Vision Syndrome Questionnaire
@@ -50,13 +61,13 @@ export default function TermsOfServicePage() {
             </p>
           </Section>
 
-          <Section title="3. Eligibility">
-            You must be at least 13 years old to use EyeGuard. By registering, you confirm you
+          <Section title="4. Eligibility">
+            You must be at least <strong className="text-foreground">17 years old</strong> to use EyeGuard. By registering, you confirm you
             meet this age requirement. Students participating as research respondents must do so
             voluntarily and may withdraw at any time without penalty.
           </Section>
 
-          <Section title="4. Your Account">
+          <Section title="5. Your Account">
             <ul className="list-disc pl-5 space-y-2 mt-2">
               <li>You are responsible for maintaining the confidentiality of your password.</li>
               <li>You must provide accurate information when creating an account.</li>
@@ -65,7 +76,7 @@ export default function TermsOfServicePage() {
             </ul>
           </Section>
 
-          <Section title="5. Data Collection and Research Use">
+          <Section title="6. Data Collection and Research Use">
             <p>
               By using EyeGuard, you consent to the collection of the data you submit (screen
               time, symptoms, sleep habits, etc.) for academic research purposes. Your data:
@@ -78,7 +89,7 @@ export default function TermsOfServicePage() {
             </ul>
           </Section>
 
-          <Section title="6. Acceptable Use">
+          <Section title="7. Acceptable Use">
             <p>You agree not to:</p>
             <ul className="list-disc pl-5 space-y-2 mt-3">
               <li>Submit false or intentionally misleading data to skew research results.</li>
@@ -88,31 +99,31 @@ export default function TermsOfServicePage() {
             </ul>
           </Section>
 
-          <Section title="7. Intellectual Property">
+          <Section title="8. Intellectual Property">
             All content, code, designs, and research materials within EyeGuard are the
             intellectual property of the research team. You may not reproduce or distribute any
             part of the system without prior written consent.
           </Section>
 
-          <Section title="8. Disclaimers and Limitation of Liability">
+          <Section title="9. Disclaimers and Limitation of Liability">
             EyeGuard is provided "as is" without warranties of any kind. The research team is not
             liable for any health decisions made based on the system's output, any data loss or
             service interruption, or any indirect or consequential damages arising from use of
             the system.
           </Section>
 
-          <Section title="9. Termination">
+          <Section title="10. Termination">
             We reserve the right to suspend or terminate accounts that violate these terms or
             that submit fraudulent data. You may also deactivate your account at any time.
           </Section>
 
-          <Section title="10. Changes to These Terms">
+          <Section title="11. Changes to These Terms">
             We may update these Terms as the system evolves. Continued use after changes
             constitutes acceptance of the updated Terms. The effective date at the top of this
             page will reflect the most recent revision.
           </Section>
 
-          <Section title="11. Contact">
+          <Section title="12. Contact">
             For questions about these Terms, contact the EyeGuard research team at{' '}
             <a href="mailto:avesquivel1011qc@student.fatima.edu.ph" className="text-primary hover:underline">
               avesquivel1011qc@student.fatima.edu.ph

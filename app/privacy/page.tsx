@@ -8,8 +8,10 @@ export default function PrivacyPolicyPage() {
       {/* Nav */}
       <nav className="sticky top-0 z-50 flex items-center justify-between px-6 sm:px-10 py-4 border-b border-border bg-background/80 backdrop-blur-md">
         <div className="flex items-center gap-2.5">
-          <Image src="/eyeguard-logo.svg" alt="EyeGuard" width={30} height={30} />
-          <span className="text-base font-bold text-foreground">EyeGuard</span>
+          <Image src="/logo-mark.png" alt="EyeGuard" width={40} height={40} className="h-10 w-10 object-contain object-center" />
+          <span className="text-base font-bold">
+            <span className="text-foreground">Eye</span><span className="text-[#f97316]">Guard</span>
+          </span>
         </div>
         <Link href="/" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back
@@ -35,7 +37,19 @@ export default function PrivacyPolicyPage() {
             use your personal data.
           </Section>
 
-          <Section title="2. What Data We Collect">
+          <Section title="2. Privacy Law Framework">
+            <p>
+              This notice is designed around the Philippines' Data Privacy Act of 2012 (Republic Act No. 10173), especially its requirements for transparency, legitimate purpose, proportionality, lawful processing, security, and data-subject rights. The Act identifies health and education information as sensitive personal information. Where another law applies to a user or processing activity, additional obligations may apply.
+            </p>
+            <p className="mt-3">
+              For users covered by the European Union General Data Protection Regulation, the same notice is intended to reflect the principles of purpose limitation, data minimisation, accuracy, storage limitation, security, and accountability. This page is product documentation, not legal advice or a legal determination that the project complies with every law.
+            </p>
+            <p className="mt-3 text-xs">
+              Sources: <a className="text-primary hover:underline" href="https://privacy.gov.ph/data-privacy-act/" target="_blank" rel="noreferrer">National Privacy Commission, Republic Act No. 10173</a> and <a className="text-primary hover:underline" href="https://gdpr.eu/article-5-how-to-process-personal-data/" target="_blank" rel="noreferrer">GDPR Article 5 principles</a>.
+            </p>
+          </Section>
+
+          <Section title="3. What Data We Collect">
             <p>When you register and use EyeGuard, we collect:</p>
             <ul className="list-disc pl-5 space-y-2 mt-3">
               <li><strong className="text-foreground">Account data:</strong> Email address and password (hashed and secured by Supabase Auth).</li>
@@ -45,7 +59,7 @@ export default function PrivacyPolicyPage() {
             </ul>
           </Section>
 
-          <Section title="3. How We Use Your Data">
+          <Section title="4. How We Use Your Data">
             <p>Your data is used exclusively for:</p>
             <ul className="list-disc pl-5 space-y-2 mt-3">
               <li>Displaying your personal eye health dashboard, risk scores, and trends.</li>
@@ -59,7 +73,7 @@ export default function PrivacyPolicyPage() {
             </p>
           </Section>
 
-          <Section title="4. Data Storage and Security">
+          <Section title="5. Data Storage and Security">
             <ul className="list-disc pl-5 space-y-2 mt-2">
               <li>All data is stored on <strong className="text-foreground">Supabase</strong>, hosted on secure cloud infrastructure with encryption at rest and in transit (TLS).</li>
               <li>Passwords are never stored in plain text — Supabase Auth handles hashing using industry-standard bcrypt.</li>
@@ -68,19 +82,19 @@ export default function PrivacyPolicyPage() {
             </ul>
           </Section>
 
-          <Section title="5. Data Sharing">
-            <p>We do not sell, rent, or share your personal data with third parties. The only external services used are:</p>
+          <Section title="6. Data Sharing and AI Processing">
+            <p>We do not sell or rent your personal data. The application uses service providers to operate authentication, storage, and AI features:</p>
             <ul className="list-disc pl-5 space-y-2 mt-3">
               <li><strong className="text-foreground">Supabase</strong> — database and authentication infrastructure.</li>
-              <li><strong className="text-foreground">Groq AI</strong> — processes your anonymised health summary to generate AI chat responses. Groq does not retain conversation data beyond the session.</li>
+              <li><strong className="text-foreground">Google Gemini</strong> — receives the personal context needed to answer regular-user AI chat requests.</li>
+              <li><strong className="text-foreground">Groq</strong> — may receive administrator chat requests when an authorised administrator uses the admin assistant.</li>
             </ul>
             <p className="mt-3">
-              Research findings may be published in aggregate, anonymised form. No individual will
-              be identifiable in any published output.
+              Research findings may be published in aggregate, anonymised form. We should not describe AI prompts as anonymous: the assistant receives only the context required for the requested feature, and users should avoid entering unnecessary identifying information in chat.
             </p>
           </Section>
 
-          <Section title="6. Your Rights">
+          <Section title="7. Your Rights">
             <p>You have the right to:</p>
             <ul className="list-disc pl-5 space-y-2 mt-3">
               <li><strong className="text-foreground">Access</strong> your personal data — visible in your dashboard at any time.</li>
@@ -90,31 +104,31 @@ export default function PrivacyPolicyPage() {
             </ul>
           </Section>
 
-          <Section title="7. Cookies and Tracking">
+          <Section title="8. Cookies and Tracking">
             EyeGuard uses session cookies managed by Supabase Auth to keep you logged in.
             We do not use third-party tracking cookies, advertising trackers, or analytics
             platforms that collect personal data.
           </Section>
 
-          <Section title="8. Children's Privacy">
+          <Section title="9. Children's Privacy">
             EyeGuard is intended for users aged 13 and above. We do not knowingly collect data
             from children under 13. If you believe a minor has registered without parental
             consent, please contact us for data removal.
           </Section>
 
-          <Section title="9. Retention">
+          <Section title="10. Retention">
             Your data is retained for the duration of the research study and may be kept in
             anonymised aggregate form thereafter for academic citation purposes. Identified
             personal records will be deleted upon request or at the conclusion of the study.
           </Section>
 
-          <Section title="10. Changes to This Policy">
+          <Section title="11. Changes to This Policy">
             If we make material changes to this Privacy Policy, we will update the effective
             date at the top of this page. Continued use of EyeGuard after changes constitutes
             acceptance of the updated policy.
           </Section>
 
-          <Section title="11. Contact Us">
+          <Section title="12. Contact Us">
             For any privacy-related requests or questions, please contact the EyeGuard research
             team at{' '}
             <a href="mailto:avesquivel1011qc@student.fatima.edu.ph" className="text-primary hover:underline">

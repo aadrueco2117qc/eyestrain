@@ -35,10 +35,10 @@ const LEVEL_STYLES: Record<NotifLevel, { icon: React.ReactNode; badge: string; d
     bg:    'bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800',
   },
   info: {
-    icon:  <Eye className="w-4 h-4 text-blue-500" />,
-    badge: 'bg-blue-500',
-    dot:   'bg-blue-400',
-    bg:    'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800',
+    icon:  <Eye className="w-4 h-4 text-primary" />,
+    badge: 'bg-primary',
+    dot:   'bg-primary/80',
+    bg:    'bg-primary/5 border-primary/20',
   },
   success: {
     icon:  <CheckCircle className="w-4 h-4 text-green-500" />,

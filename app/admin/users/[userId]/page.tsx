@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft, Lock, Send, Copy, Check,
-  Pencil, Trash2, AlertTriangle, X, ShieldAlert,
+  Pencil, EyeOff, Eye, AlertTriangle, X, ShieldAlert,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -20,6 +20,7 @@ interface DailyLog {
   blurry_vision: number
   dry_eyes: number
   risk_level: string
+  hidden_by_admin?: boolean  // only present after migration 001 is applied
 }
 
 interface UserProfile {
@@ -60,15 +61,16 @@ interface ProfileForm {
   age: string
   gender: string
   year_level: string
+  year_level_custom: string   // used when year_level === 'Others'
   field_of_study: string
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const RISK_COLORS: Record<string, string> = {
-  Low: 'text-green-600',
+  Low:      'text-green-600',
   Moderate: 'text-yellow-600',
-  High: 'text-orange-600',
+  High:     'text-orange-600',
   Critical: 'text-red-600',
 }
 
@@ -79,9 +81,10 @@ const RISK_BADGES: Record<string, string> = {
   Critical: 'bg-red-100    text-red-700    dark:bg-red-900/30    dark:text-red-400',
 }
 
-const GENDER_OPTIONS    = ['', 'Male', 'Female', 'Other', 'Prefer not to say']
-const YEAR_OPTIONS      = ['', '1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year or higher']
-const FIELD_OPTIONS     = ['', 'IT / Computer Science', 'Engineering', 'Business', 'Health Sciences', 'Education', 'Arts and Humanities', 'Other']
+const GENDER_OPTIONS = ['', 'Male', 'Female', 'Other', 'Prefer not to say']
+// "5th Year or higher" is legacy — new label is "Others" with a free-text field
+const YEAR_OPTIONS   = ['', '1st Year', '2nd Year', '3rd Year', '4th Year', 'Others']
+const FIELD_OPTIONS  = ['', 'IT / Computer Science', 'Engineering', 'Business', 'Health Sciences', 'Education', 'Arts and Humanities', 'Other']
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -96,7 +99,18 @@ function activeSymptoms(log: DailyLog): string {
   return s.length > 0 ? s.join(', ') : 'None'
 }
 
-// Small re-usable select
+/** Normalise stored year_level so legacy "5th Year or higher" shows as "Others" */
+function normalizeYearLevel(raw: string | undefined | null): { dropdown: string; custom: string } {
+  if (!raw) return { dropdown: '', custom: '' }
+  const standard = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Others']
+  if (standard.includes(raw)) return { dropdown: raw, custom: '' }
+  if (raw === '5th Year or higher') return { dropdown: 'Others', custom: '' }
+  // anything else (free-text) → Others + fill custom field
+  return { dropdown: 'Others', custom: raw }
+}
+
+// ── Re-usable select ──────────────────────────────────────────────────────────
+
 function AdminSelect({
   id, label, value, options, onChange,
 }: {
@@ -184,20 +198,26 @@ export default function AdminUserDetailPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [profileForm, setProfileForm] = useState<ProfileForm>({
     first_name: '', last_name: '', age: '',
-    gender: '', year_level: '', field_of_study: '',
+    gender: '', year_level: '', year_level_custom: '', field_of_study: '',
   })
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
   const [saveError, setSaveError] = useState('')
+
+  // Save profile confirmation
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false)
 
   // Delete user modal
   const [showDeleteUser, setShowDeleteUser] = useState(false)
   const [deleteUserLoading, setDeleteUserLoading] = useState(false)
   const [deleteUserError, setDeleteUserError] = useState('')
 
-  // Delete log modal
-  const [logToDelete, setLogToDelete] = useState<DailyLog | null>(null)
-  const [deleteLogLoading, setDeleteLogLoading] = useState(false)
+  // Hide log modal (soft-hide instead of hard-delete)
+  const [logToHide, setLogToHide] = useState<DailyLog | null>(null)
+  const [hideLogLoading, setHideLogLoading] = useState(false)
+
+  // Show hidden logs toggle
+  const [showHidden, setShowHidden] = useState(false)
 
   // Password reset modal
   const [showPasswordModal, setShowPasswordModal] = useState(false)
@@ -225,13 +245,16 @@ export default function AdminUserDetailPage() {
       .then(json => {
         setData(json)
         const p = json.profile ?? {}
+        const rawYear = p.year_level ?? ''
+        const { dropdown, custom } = normalizeYearLevel(rawYear)
         setProfileForm({
-          first_name:    p.first_name    ?? '',
-          last_name:     p.last_name     ?? '',
-          age:           p.age != null   ? String(p.age) : '',
-          gender:        p.gender        ?? '',
-          year_level:    p.year_level    ?? '',
-          field_of_study: p.field_of_study ?? '',
+          first_name:        p.first_name    ?? '',
+          last_name:         p.last_name     ?? '',
+          age:               p.age != null   ? String(p.age) : '',
+          gender:            p.gender        ?? '',
+          year_level:        dropdown,
+          year_level_custom: custom,
+          field_of_study:    p.field_of_study ?? '',
         })
       })
       .catch(err => setError(err.message === 'not_found' ? 'No logs found for this user.' : 'Failed to load user data.'))
@@ -252,21 +275,39 @@ export default function AdminUserDetailPage() {
       .finally(() => setAuditLoading(false))
   }, [userId, isRegistered, data?.profile?.email])
 
-  // ── Profile save ────────────────────────────────────────────────────────────
+  // ── Profile save (after confirmation) ──────────────────────────────────────
   const handleSaveProfile = async () => {
     if (!userId) return
     setSaveLoading(true); setSaveMessage(''); setSaveError('')
+    setShowSaveConfirm(false)
     try {
+      // Resolve the actual year_level to save
+      const resolvedYear = profileForm.year_level === 'Others'
+        ? (profileForm.year_level_custom.trim() || 'Others')
+        : profileForm.year_level
+
       const res = await fetch(`/api/admin/users/${userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profile: profileForm }),
+        body: JSON.stringify({
+          profile: {
+            first_name:    profileForm.first_name,
+            last_name:     profileForm.last_name,
+            age:           profileForm.age,
+            gender:        profileForm.gender,
+            year_level:    resolvedYear,
+            field_of_study: profileForm.field_of_study,
+          },
+        }),
       })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error || 'Failed to save profile')
       setSaveMessage('Profile updated successfully.')
       setIsEditing(false)
-      setData(cur => cur ? { ...cur, profile: { ...cur.profile, ...profileForm } } : cur)
+      setData(cur => cur ? {
+        ...cur,
+        profile: { ...cur.profile, ...profileForm, year_level: resolvedYear },
+      } : cur)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save profile')
     } finally {
@@ -289,20 +330,45 @@ export default function AdminUserDetailPage() {
     }
   }
 
-  // ── Delete log entry ────────────────────────────────────────────────────────
-  const handleDeleteLog = async () => {
-    if (!logToDelete) return
-    setDeleteLogLoading(true)
+  // ── Hide log (soft-hide, data preserved) ───────────────────────────────────
+  const handleHideLog = async () => {
+    if (!logToHide) return
+    setHideLogLoading(true)
     try {
-      const res = await fetch(`/api/admin/logs/${logToDelete.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/admin/logs/${logToHide.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hidden: true }),
+      })
       const body = await res.json()
-      if (!res.ok) throw new Error(body.error || 'Failed to delete log')
-      setData(cur => cur ? { ...cur, logs: cur.logs.filter(l => l.id !== logToDelete.id) } : cur)
+      if (!res.ok) throw new Error(body.error || 'Failed to hide log')
+      // Mark as hidden in local state (don't remove — admin can toggle visibility)
+      setData(cur => cur ? {
+        ...cur,
+        logs: cur.logs.map(l => l.id === logToHide.id ? { ...l, hidden_by_admin: true } : l),
+      } : cur)
     } catch (err) {
       console.error(err)
     } finally {
-      setDeleteLogLoading(false)
-      setLogToDelete(null)
+      setHideLogLoading(false)
+      setLogToHide(null)
+    }
+  }
+
+  // ── Unhide log ──────────────────────────────────────────────────────────────
+  const handleUnhideLog = async (log: DailyLog) => {
+    try {
+      await fetch(`/api/admin/logs/${log.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hidden: false }),
+      })
+      setData(cur => cur ? {
+        ...cur,
+        logs: cur.logs.map(l => l.id === log.id ? { ...l, hidden_by_admin: false } : l),
+      } : cur)
+    } catch (err) {
+      console.error(err)
     }
   }
 
@@ -345,6 +411,9 @@ export default function AdminUserDetailPage() {
     ? [data.profile.first_name, data.profile.last_name].filter(Boolean).join(' ')
     : null
 
+  const visibleLogs = data?.logs.filter(l => showHidden || !l.hidden_by_admin) ?? []
+  const hiddenCount = data?.logs.filter(l => l.hidden_by_admin).length ?? 0
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
@@ -362,13 +431,13 @@ export default function AdminUserDetailPage() {
           </div>
         </div>
 
-        {/* Delete user — only for registered users */}
+        {/* Delete user — only for registered users, requires confirmation */}
         {isRegistered && !loading && data && (
           <button
             onClick={() => setShowDeleteUser(true)}
             className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-colors"
           >
-            <Trash2 className="w-4 h-4" />
+            <AlertTriangle className="w-4 h-4" />
             Delete User
           </button>
         )}
@@ -412,7 +481,11 @@ export default function AdminUserDetailPage() {
                   { label: 'Name',           value: displayName || '—' },
                   { label: 'Age',            value: data.profile?.age ?? '—' },
                   { label: 'Gender',         value: data.profile?.gender ?? '—' },
-                  { label: 'Year Level',     value: data.profile?.year_level ?? '—' },
+                  { label: 'Year Level',     value: (() => {
+                    const { dropdown, custom } = normalizeYearLevel(data.profile?.year_level)
+                    if (dropdown === 'Others' && custom) return custom
+                    return dropdown || '—'
+                  })() },
                   { label: 'Field of Study', value: data.profile?.field_of_study ?? '—' },
                 ].map(({ label, value }) => (
                   <div key={label}>
@@ -448,9 +521,26 @@ export default function AdminUserDetailPage() {
                   <AdminSelect id="gender" label="Gender"
                     value={profileForm.gender} options={GENDER_OPTIONS}
                     onChange={v => setProfileForm(p => ({ ...p, gender: v }))} />
-                  <AdminSelect id="year" label="Year Level"
-                    value={profileForm.year_level} options={YEAR_OPTIONS}
-                    onChange={v => setProfileForm(p => ({ ...p, year_level: v }))} />
+
+                  {/* Year Level — dropdown + optional free-text for "Others" */}
+                  <div className="space-y-2">
+                    <AdminSelect id="year" label="Year Level"
+                      value={profileForm.year_level} options={YEAR_OPTIONS}
+                      onChange={v => setProfileForm(p => ({ ...p, year_level: v, year_level_custom: v !== 'Others' ? '' : p.year_level_custom }))} />
+                    {profileForm.year_level === 'Others' && (
+                      <div>
+                        <label htmlFor="year-custom" className="text-xs text-muted-foreground">Specify year level</label>
+                        <input
+                          id="year-custom"
+                          value={profileForm.year_level_custom}
+                          onChange={e => setProfileForm(p => ({ ...p, year_level_custom: e.target.value }))}
+                          placeholder="e.g. 5th Year, Graduate, Irregular"
+                          className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
+                        />
+                      </div>
+                    )}
+                  </div>
+
                   <AdminSelect id="field" label="Field of Study"
                     value={profileForm.field_of_study} options={FIELD_OPTIONS}
                     onChange={v => setProfileForm(p => ({ ...p, field_of_study: v }))} />
@@ -464,7 +554,8 @@ export default function AdminUserDetailPage() {
                     className="px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors">
                     Cancel
                   </button>
-                  <button onClick={handleSaveProfile} disabled={saveLoading}
+                  {/* Save triggers confirmation modal */}
+                  <button onClick={() => setShowSaveConfirm(true)} disabled={saveLoading}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-60 transition-colors">
                     {saveLoading
                       ? <><span className="w-3.5 h-3.5 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" />Saving…</>
@@ -488,11 +579,22 @@ export default function AdminUserDetailPage() {
 
           {/* ── Log History ── */}
           <section aria-labelledby="logs-heading">
-            <h2 id="logs-heading" className="text-lg font-semibold text-foreground mb-4">
-              Log History ({data.logs.length})
-            </h2>
+            <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+              <h2 id="logs-heading" className="text-lg font-semibold text-foreground">
+                Log History ({visibleLogs.length}{hiddenCount > 0 ? ` / ${data.logs.length} total` : ''})
+              </h2>
+              {hiddenCount > 0 && (
+                <button
+                  onClick={() => setShowHidden(v => !v)}
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-muted transition-colors text-muted-foreground"
+                >
+                  {showHidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  {showHidden ? 'Hide hidden logs' : `Show ${hiddenCount} hidden log${hiddenCount !== 1 ? 's' : ''}`}
+                </button>
+              )}
+            </div>
 
-            {data.logs.length === 0 ? (
+            {visibleLogs.length === 0 ? (
               <p className="text-muted-foreground text-sm">No logs found for this user.</p>
             ) : (
               <div className="border border-border rounded-xl overflow-hidden">
@@ -511,9 +613,14 @@ export default function AdminUserDetailPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {data.logs.map(log => (
-                        <tr key={log.id} className="border-t border-border hover:bg-muted/30 transition-colors">
-                          <td className="px-4 py-3 text-foreground font-medium">{log.date}</td>
+                      {visibleLogs.map(log => (
+                        <tr key={log.id} className={`border-t border-border transition-colors ${log.hidden_by_admin ? 'opacity-50 bg-muted/20' : 'hover:bg-muted/30'}`}>
+                          <td className="px-4 py-3 text-foreground font-medium">
+                            {log.date}
+                            {log.hidden_by_admin && (
+                              <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border align-middle">hidden</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-muted-foreground">{log.screen_time}h</td>
                           <td className="px-4 py-3 text-muted-foreground">{log.sleep_hours}h</td>
                           <td className="px-4 py-3 text-muted-foreground">{log.brightness}%</td>
@@ -526,13 +633,27 @@ export default function AdminUserDetailPage() {
                             ) : '—'}
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <button
-                              onClick={() => setLogToDelete(log)}
-                              aria-label={`Delete log for ${log.date}`}
-                              className="p-1.5 rounded-md text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {log.hidden_by_admin ? (
+                              // Unhide button — no confirmation needed (reversible)
+                              <button
+                                onClick={() => handleUnhideLog(log)}
+                                aria-label={`Unhide log for ${log.date}`}
+                                title="Unhide this log"
+                                className="p-1.5 rounded-md text-muted-foreground hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-950/20 transition-colors"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              // Hide button — opens confirmation
+                              <button
+                                onClick={() => setLogToHide(log)}
+                                aria-label={`Hide log for ${log.date}`}
+                                title="Hide this log (data is preserved)"
+                                className="p-1.5 rounded-md text-muted-foreground hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20 transition-colors"
+                              >
+                                <EyeOff className="w-4 h-4" />
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -541,6 +662,9 @@ export default function AdminUserDetailPage() {
                 </div>
               </div>
             )}
+            <p className="text-xs text-muted-foreground mt-2">
+              Hiding a log removes it from the user&apos;s view but preserves the data for research purposes. Admins can unhide logs at any time.
+            </p>
           </section>
 
           {/* ── Audit History ── */}
@@ -606,6 +730,18 @@ export default function AdminUserDetailPage() {
         </>
       )}
 
+      {/* ── Save Profile confirmation modal ── */}
+      {showSaveConfirm && (
+        <ConfirmModal
+          title="Save Profile Changes"
+          message={`Are you sure you want to update the profile for ${displayName ?? data?.profile?.email ?? 'this user'}? This will overwrite their current profile data.`}
+          confirmLabel="Save Changes"
+          loading={saveLoading}
+          onConfirm={handleSaveProfile}
+          onCancel={() => setShowSaveConfirm(false)}
+        />
+      )}
+
       {/* ── Delete User confirmation modal ── */}
       {showDeleteUser && (
         <ConfirmModal
@@ -619,16 +755,15 @@ export default function AdminUserDetailPage() {
         />
       )}
 
-      {/* ── Delete Log confirmation modal ── */}
-      {logToDelete && (
+      {/* ── Hide Log confirmation modal ── */}
+      {logToHide && (
         <ConfirmModal
-          title="Delete Log Entry"
-          message={`Delete the log for ${logToDelete.date}? The associated risk prediction will also be removed.`}
-          confirmLabel="Delete Log"
-          destructive
-          loading={deleteLogLoading}
-          onConfirm={handleDeleteLog}
-          onCancel={() => setLogToDelete(null)}
+          title="Hide Log Entry"
+          message={`Hide the log for ${logToHide.date}? The data is preserved and you can unhide it at any time. The user will no longer see this entry.`}
+          confirmLabel="Hide Log"
+          loading={hideLogLoading}
+          onConfirm={handleHideLog}
+          onCancel={() => setLogToHide(null)}
         />
       )}
 
@@ -673,7 +808,7 @@ export default function AdminUserDetailPage() {
 
                 <button onClick={handleSendResetEmail} disabled={resetLoading}
                   className="w-full flex items-center gap-3 px-4 py-3 border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-50 text-left">
-                  <Send className="w-4 h-4 flex-shrink-0 text-blue-600" />
+                  <Send className="w-4 h-4 flex-shrink-0 text-primary" />
                   <div>
                     <p className="text-sm font-medium text-foreground">Send Reset Email</p>
                     <p className="text-xs text-muted-foreground">User receives a link to reset their password</p>
@@ -685,7 +820,7 @@ export default function AdminUserDetailPage() {
                   <ShieldAlert className="w-4 h-4 flex-shrink-0 text-orange-600" />
                   <div>
                     <p className="text-sm font-medium text-foreground">Generate Temporary Password</p>
-                    <p className="text-xs text-muted-foreground">You'll share a one-time password directly{!isRegistered ? ' (registered users only)' : ''}</p>
+                    <p className="text-xs text-muted-foreground">You&apos;ll share a one-time password directly{!isRegistered ? ' (registered users only)' : ''}</p>
                   </div>
                 </button>
 

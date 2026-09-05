@@ -31,7 +31,7 @@ export async function GET(
   // For survey respondents we look up by email when userId isn't a UUID.
   const query = adminClient
     .from('daily_logs')
-    .select('*')
+    .select('id, date, email, user_id, age, gender, year_level, field_of_study, screen_time, sleep_hours, brightness, eye_strain, headaches, blurry_vision, dry_eyes, risk_level, hidden_by_admin')
     .order('date', { ascending: false })
     .eq(isUuid ? 'user_id' : 'email', decodeURIComponent(userId))
 
@@ -134,7 +134,7 @@ export async function PATCH(
     .single()
 
   if (!existingProfileError && existingProfile) {
-    beforeProfile = existingProfile as Record<string, unknown>
+    beforeProfile = existingProfile as unknown as Record<string, unknown>
   }
 
   const { error: updateError } = await adminClient

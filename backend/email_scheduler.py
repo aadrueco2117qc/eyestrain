@@ -17,7 +17,88 @@ from apscheduler.triggers.interval import IntervalTrigger
 logger = logging.getLogger(__name__)
 
 
-def send_email(to_email: str, user_name: str, risk_level: str = "") -> bool:
+def send_high_risk_alert(to_email: str, user_name: str, risk_level: str, recommendations=None) -> bool:
+    """Send an immediate high-risk alert email to the user. Returns True on success."""
+    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_user = os.environ.get("SMTP_USER", "")
+    smtp_pass = os.environ.get("SMTP_PASS", "")
+
+    if not smtp_user or not smtp_pass:
+        logger.warning("[Email] SMTP credentials not configured — skipping high-risk alert.")
+        return False
+
+    try:
+        is_critical = risk_level == "Critical"
+        color = "#dc2626" if is_critical else "#ea580c"
+        bg_color = "#fef2f2" if is_critical else "#fff7ed"
+        border_color = "#fecaca" if is_critical else "#fed7aa"
+
+        recommendation_html = ""
+        if recommendations:
+            items = recommendations[:3]
+            recommendation_html = (
+                "<p style='color:#475569;font-weight:600;margin-top:16px;'>Recommended actions:</p>"
+                "<ul style='color:#475569;'>"
+                + "".join(f"<li>{item}</li>" for item in items)
+                + "</ul>"
+            )
+
+        html = f"""
+        <html><body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+          <div style="background:#f97316;padding:24px;border-radius:12px 12px 0 0;">
+            <h1 style="color:white;margin:0;font-size:24px;">👁 EyeGuard</h1>
+            <p style="color:#fed7aa;margin:4px 0 0;">Eye Health Risk Alert</p>
+          </div>
+          <div style="background:#f8fafc;padding:24px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0;">
+            <p style="color:#1e293b;font-size:16px;">Hi {user_name},</p>
+            <div style="background:{bg_color};border:1px solid {border_color};border-radius:8px;padding:16px;margin:16px 0;">
+              <p style="color:{color};font-weight:700;font-size:18px;margin:0;">
+                ⚠ {risk_level} Risk Level Detected
+              </p>
+              <p style="color:#475569;margin:8px 0 0;">
+                Your latest eye health assessment shows a <strong>{risk_level}</strong> risk level.
+                Please take action to protect your eye health.
+              </p>
+            </div>
+            <p style="color:#475569;">
+              Early action can prevent long-term damage. Please review your screen habits
+              and follow the recommendations below.
+            </p>
+            {recommendation_html}
+            <a href="http://localhost:3000/dashboard"
+               style="display:inline-block;background:#f97316;color:white;padding:12px 24px;
+                      border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0;">
+              View My Dashboard
+            </a>
+            <p style="color:#94a3b8;font-size:12px;margin-top:24px;">
+              You're receiving this because you enabled email notifications in EyeGuard Settings.<br>
+              To unsubscribe, go to <strong>Settings → Notification Settings</strong> and disable Email Notifications.
+            </p>
+          </div>
+        </body></html>
+        """
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"EyeGuard — {risk_level} Eye Health Risk Alert ⚠"
+        msg["From"] = f"EyeGuard <{smtp_user}>"
+        msg["To"] = to_email
+        msg.attach(MIMEText(html, "html"))
+
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_user, to_email, msg.as_string())
+
+        logger.info(f"[Email] High-risk alert ({risk_level}) sent to {to_email}")
+        return True
+
+    except Exception as e:
+        logger.error(f"[Email] Failed to send high-risk alert to {to_email}: {e}")
+        return False
+
+
+def send_email(to_email: str, user_name: str, risk_level: str = "", recommendations=None) -> bool:
     """Send a single reminder email. Returns True on success."""
     smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(os.environ.get("SMTP_PORT", "587"))
@@ -33,6 +114,12 @@ def send_email(to_email: str, user_name: str, risk_level: str = "") -> bool:
             f"Your last recorded risk level was <strong>{risk_level}</strong>. "
             if risk_level else ""
         )
+        recommendation_html = ""
+        if recommendations:
+            items = recommendations[:3]
+            recommendation_html = "<p style='color:#475569;font-weight:600;'>Recommended next steps:</p><ul style='color:#475569;'>" + "".join(
+                f"<li>{item}</li>" for item in items
+            ) + "</ul>"
 
         html = f"""
         <html><body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;">
@@ -44,6 +131,7 @@ def send_email(to_email: str, user_name: str, risk_level: str = "") -> bool:
             <p style="color:#1e293b;font-size:16px;">Hi {user_name},</p>
             <p style="color:#475569;">Don't forget to log your daily eye health data today!</p>
             <p style="color:#475569;">{risk_note}Regular logging helps the AI model give you more accurate predictions and personalized recommendations.</p>
+            {recommendation_html}
             <a href="http://localhost:3000/daily-log"
                style="display:inline-block;background:#4f46e5;color:white;padding:12px 24px;
                       border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0;">
@@ -140,17 +228,13 @@ def check_and_send_reminders():
                 logger.info(f"[Email Scheduler] User {uid} already logged today — skipping.")
                 continue
 
-            # Get email from most recent daily log
-            email_res = client.from_("daily_logs") \
-                .select("email") \
-                .eq("user_id", uid) \
-                .order("created_at", desc=True) \
-                .limit(1) \
-                .execute()
-
+            # Use the authenticated registration email, not a copied log field.
             email = None
-            if email_res.data:
-                email = email_res.data[0].get("email")
+            try:
+                auth_user = client.auth.admin.get_user_by_id(uid)
+                email = getattr(getattr(auth_user, "user", None), "email", None)
+            except Exception as auth_error:
+                logger.warning(f"[Email Scheduler] Could not load auth email for {uid}: {auth_error}")
 
             if not email:
                 logger.warning(f"[Email Scheduler] No email found for user {uid} — skipping.")
@@ -181,7 +265,22 @@ def check_and_send_reminders():
                 if rl is not None and 0 <= int(rl) <= 3:
                     risk_level = risk_labels[int(rl)]
 
-            if send_email(email, name, risk_level):
+            recommendations = []
+            latest_log_res = client.from_("predictions") \
+                .select("recommendations") \
+                .eq("user_id", uid) \
+                .order("created_at", desc=True) \
+                .limit(1) \
+                .execute()
+            if latest_log_res.data:
+                raw_recommendations = latest_log_res.data[0].get("recommendations") or []
+                for recommendation in raw_recommendations:
+                    if isinstance(recommendation, dict) and recommendation.get("title"):
+                        recommendations.append(recommendation["title"])
+                    elif isinstance(recommendation, str):
+                        recommendations.append(recommendation)
+
+            if send_email(email, name, risk_level, recommendations):
                 sent += 1
 
         if sent:
