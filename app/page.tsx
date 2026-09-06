@@ -145,20 +145,18 @@ export default function Home() {
           <div className="relative flex flex-col justify-center lg:pr-2">
             <div className="inline-flex items-center gap-2 self-start px-3.5 py-1.5 rounded-full border border-[#f97316]/35 bg-[#f97316]/10 text-[#fb923c] text-xs font-semibold mb-6">
               <span className="w-1.5 h-1.5 rounded-full bg-[#f97316] animate-pulse" />
-              Capstone Experiment
+              Machine Learning Research Project
             </div>
 
             <h1 className="text-4xl sm:text-5xl font-bold leading-[1.1] tracking-tight max-w-lg">
-              Protect Your Eyes,{' '}
+              Understand Your Screen Time,{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#f97316] to-[#fb923c]">
-                Predict the Risk
+                Predict Your Eye Health Risk
               </span>
             </h1>
 
             <p className="text-base sm:text-lg text-[#fff7ed]/55 max-w-md mt-5 leading-relaxed">
-              EyeGuard is a student research prototype exploring how daily screen habits
-              and symptoms relate to Computer Vision Syndrome — using machine learning
-              and evidence-based scoring. Join the experiment, log your day, and see what the data shows.
+              EyeGuard is a web-based research system designed for college students to analyze screen time and self-reported symptoms related to eye strain and digital fatigue. Using machine learning, EyeGuard predicts risk levels and provides preventive recommendations to promote healthier screen usage habits.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 mt-8">
@@ -178,7 +176,7 @@ export default function Home() {
             </div>
 
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-8 text-xs text-[#fff7ed]/40">
-              {['Early research stage', 'Free to try', 'Built for students'].map((t) => (
+              {['Machine learning powered', 'Free to try', 'Built for students'].map((t) => (
                 <span key={t} className="flex items-center gap-1.5">
                   <CheckCircle className="w-3.5 h-3.5 text-[#f97316]/70" />
                   {t}

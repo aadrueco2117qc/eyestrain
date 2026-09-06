@@ -211,11 +211,75 @@ export async function POST(request: NextRequest) {
     ).toFixed(3));
 
     // ── Recommendations ───────────────────────────────────────────────────────
+    // ── STEP 8 — Flask ML override (Random Forest + Gradient Boosting) ────────
+    // Try to call the Flask ML backend. If it responds successfully, its
+    // risk_level, risk_percentage, and fatigue_score replace the rule-based
+    // values above. The rule-based score is kept as a fallback if Flask is
+    // unavailable (not running, timeout, or models not yet trained).
+    const flaskBase = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api')
+      .replace(/\/api\/?$/, '');
+    const retrainKey = process.env.NEXT_PUBLIC_RETRAIN_KEY ?? '';
+
+    // Map Next.js inputs → Flask feature dict
+    const symptomNames: string[] = [];
+    if (eyeStrainFreq    > 0) symptomNames.push(eyeStrainFreq    >= 1.5 ? 'severe_eye_strain'    : eyeStrainFreq >= 1.0 ? 'moderate_eye_strain' : 'mild_eye_discomfort');
+    if (blurryVisionFreq > 0) symptomNames.push('blurred_vision');
+    if (headachesFreq    > 0) symptomNames.push('headache');
+    if (dryEyesFreq      > 0) symptomNames.push('dry_eyes');
+
+    const flaskLog = {
+      screen_time_hours:  screenTime,
+      break_minutes:      breaksTaken !== null ? breaksTaken * 5 : 0,
+      symptoms:           symptomNames,
+      sleep_quality:      sleepHours,
+      water_intake_cups:  6,              // not collected — use neutral default
+      break_type:         'rest',         // not collected — use neutral default
+      eye_exercises:      0,              // not collected
+      blue_light_filter:  blueLight === 'Always' || blueLight === 'Regularly',
+    };
+
+    // Mutable result variables — may be overwritten by Flask response
+    let finalRiskLevel    = riskLevel;
+    let finalRiskScore    = riskScore;
+    let finalFatigueScore = fatigueScore;
+    let finalConfidence   = confidence;
+    let mlSource: 'flask' | 'rule-based' = 'rule-based';
+
+    try {
+      const mlRes = await fetch(`${flaskBase}/api/ml/predict`, {
+        method:  'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'X-Retrain-Key': retrainKey,
+        },
+        body:    JSON.stringify(flaskLog),
+        signal:  AbortSignal.timeout(4000),   // 4 s — don't stall the user
+      });
+
+      if (mlRes.ok) {
+        const mlData = await mlRes.json();
+        if (mlData.success && typeof mlData.risk_level === 'number') {
+          finalRiskLevel    = Math.min(3, Math.max(0, Math.round(mlData.risk_level)));
+          finalRiskScore    = parseFloat(Math.min(100, Math.max(0, mlData.risk_percentage ?? riskScore)).toFixed(1));
+          finalFatigueScore = typeof mlData.fatigue_score === 'number'
+            ? parseFloat(Math.min(10, Math.max(0, mlData.fatigue_score)).toFixed(1))
+            : fatigueScore;
+          finalConfidence   = typeof mlData.confidence === 'number'
+            ? parseFloat(Math.min(0.99, Math.max(0.50, mlData.confidence)).toFixed(3))
+            : confidence;
+          mlSource = 'flask';
+        }
+      }
+    } catch {
+      // Flask unavailable — silently use rule-based values already computed
+    }
+
+    // ── Recommendations ───────────────────────────────────────────────────────
     const recInput: RecommendationInput = {
       screenTime,
       sleepHours,
       brightness,
-      riskLevel: ['Low', 'Moderate', 'High', 'Critical'][riskLevel],
+      riskLevel: ['Low', 'Moderate', 'High', 'Critical'][finalRiskLevel],
       eyeStrain:    eyeStrainFreq    > 0 ? 1 : 0,
       headaches:    headachesFreq    > 0 ? 1 : 0,
       blurryVision: blurryVisionFreq > 0 ? 1 : 0,
@@ -252,7 +316,7 @@ export async function POST(request: NextRequest) {
         brightness:  brightness,
         sleep_hours: sleepHours,
         notes:       formData.notes,
-        risk_level:  ['Low', 'Moderate', 'High', 'Critical'][riskLevel],
+        risk_level:  ['Low', 'Moderate', 'High', 'Critical'][finalRiskLevel],
       }, { onConflict: 'user_id,date' })
       .select()
       .single();
@@ -270,10 +334,10 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id:        user.id,
         daily_log_id:   dailyLog.id,
-        risk_level:     riskLevel,
-        risk_percentage: riskScore,
-        fatigue_score:  fatigueScore,
-        confidence:     confidence,
+        risk_level:     finalRiskLevel,
+        risk_percentage: finalRiskScore,
+        fatigue_score:  finalFatigueScore,
+        confidence:     finalConfidence,
         recommendations: recommendations,
       })
       .select()
@@ -285,13 +349,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Fire-and-forget Flask retrain notification
-    const flaskBase = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
     fetch(`${flaskBase}/api/ml/notify-new-log`, { method: 'POST' }).catch(() => {});
 
     // ── High-risk email alert (fire-and-forget) ───────────────────────────────
     // Only for High (2) or Critical (3) and only if user opted in
-    if (riskLevel >= 2) {
-      ;(async () => {
+    if (finalRiskLevel >= 2) {      ;(async () => {
         try {
           const { data: userSettings } = await supabase
             .from('user_settings')
@@ -345,12 +407,13 @@ export async function POST(request: NextRequest) {
       success:          true,
       daily_log_id:     dailyLog.id,
       prediction_id:    prediction.id,
-      risk_level:       riskLevel,
-      risk_percentage:  riskScore,
-      fatigue_score:    fatigueScore,
-      confidence:       confidence,
+      risk_level:       finalRiskLevel,
+      risk_percentage:  finalRiskScore,
+      fatigue_score:    finalFatigueScore,
+      confidence:       finalConfidence,
       recommendations:  recommendations,
-      // Expose component scores so the page can display them without recalculating
+      prediction_source: mlSource,       // 'flask' | 'rule-based' — useful for debugging
+      // Rule-based component breakdown (always computed, even when Flask is used)
       score_breakdown: {
         symptomScore:    parseFloat(symptomScore.toFixed(1)),
         screenMod:       parseFloat(screenMod.toFixed(1)),

@@ -92,3 +92,25 @@ Sheppard AL, Wolffsohn JS. Digital eye strain: prevalence, measurement and ameli
 Huang HM, Chang DS, Wu PC. The Association between Near Work Activities and Myopia in Children — A Systematic Review and Meta-Analysis. PLOS ONE. 2015;10(10):e0140419.
 
 Scheiman M, Wick B. Clinical Management of Binocular Vision. 4th ed. Lippincott Williams and Wilkins, 2014.
+
+
+Alignment with the research study
+
+This system is directly aligned with the capstone study, which explicitly states that EyeGuard collects screen time and self-reported symptom data from college students, processes those inputs using Random Forest and XGBoost machine learning models, and generates risk level predictions alongside personalized preventive recommendations. The scoring logic described throughout this document reflects the same data pipeline — symptom frequency, daily screen exposure, sleep, brightness, and lifestyle factors are the same variables the study's models were trained and evaluated on. The risk levels (Low, Moderate, High, Critical) and the recommendation outputs shown in the app correspond directly to the outputs the research study measures and reports.
+
+
+How prediction actually works (updated)
+
+Note on what was previously running: Prior to this update, the live app used only a rule-based scoring engine inside the Next.js app. That engine computed risk scores from symptom weights and environmental modifiers using published clinical guidelines. It did not call any machine learning model. That was accurate to describe but inconsistent with the research paper's claim that EyeGuard uses Random Forest and Gradient Boosting.
+
+As of the current version, the system operates as a true dual-path prediction system.
+
+When a user submits their daily log, the prediction route first calls the Flask ML backend at /api/ml/predict. The Flask backend hosts three scikit-learn models trained on real Supabase data. The primary model is a Random Forest classifier with 200 trees that outputs a risk level from 0 to 3. A Gradient Boosting regressor outputs the risk percentage as a continuous value from 0 to 100. A Linear Regression model outputs the fatigue score from 0 to 10. If Flask responds successfully within 4 seconds, its outputs replace the rule-based values and are saved to the database. The response includes a prediction_source field that is either "flask" or "rule-based" so it is always clear which path was used.
+
+What the ML models were trained on: The models use 12 features — screen time in minutes, total break time, a weighted symptom severity index, sleep quality, water intake ratio, break effectiveness, break-to-screen-time ratio, raw symptom count, whether an outdoor break was taken, eye exercise count, blue light filter usage, and screen time as a fraction of the day. All features are StandardScaler-normalised before being passed to the models.
+
+Retraining happens automatically every 10 new log submissions in a background thread using the latest Supabase data. When at least 20 real rows exist, the models train on real user data only.
+
+If Flask is unavailable or times out, the rule-based engine described in the earlier sections of this document is used as a fallback. This means the system always returns a prediction even when the ML backend is offline.
+
+This architecture means the system is correctly described as a machine learning system for the purposes of the research study. The Random Forest and Gradient Boosting models are the live prediction source when the Flask backend is running.

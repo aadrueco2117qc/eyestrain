@@ -148,6 +148,49 @@ def create_app(config_name='development'):
             "new_logs_since_retrain": _new_logs_since_retrain,
             "retrain_threshold": RETRAIN_EVERY_N_LOGS,
         })
+
+    @app.route('/api/ml/predict', methods=['POST'])
+    def ml_predict():
+        """
+        Direct ML prediction endpoint for the Next.js predict-supabase route.
+        Accepts a daily log dict, maps it to the 12-feature vector, and returns
+        a prediction from the trained Random Forest / Gradient Boosting models.
+
+        Protected by X-Retrain-Key header (same key as retrain endpoint).
+        Falls back gracefully — if models aren't loaded, returns 503.
+        """
+        provided_key = request.headers.get("X-Retrain-Key", "")
+        expected_key = app.config.get("RETRAIN_API_KEY", "")
+        if expected_key and provided_key != expected_key:
+            return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+        if ml_predictor is None:
+            return jsonify({"success": False, "error": "ML models not loaded"}), 503
+
+        data = request.get_json() or {}
+
+        # Build the daily_log dict in the format FeatureEngineer.extract_features() expects
+        log = {
+            "screen_time_hours":  float(data.get("screen_time_hours", 0)),
+            "break_minutes":      float(data.get("break_minutes", 0)),
+            "symptoms":           data.get("symptoms", []),
+            "sleep_quality":      float(data.get("sleep_quality", 7)),
+            "water_intake_cups":  float(data.get("water_intake_cups", 6)),
+            "break_type":         data.get("break_type", "rest"),
+            "eye_exercises":      int(data.get("eye_exercises", 0)),
+            "blue_light_filter":  bool(data.get("blue_light_filter", False)),
+        }
+
+        try:
+            result = ml_predictor.predict_today(log)
+            # Normalise risk level name: Flask uses "Severe", app uses "Critical"
+            if result.get("risk_level_name") == "Severe":
+                result["risk_level_name"] = "Critical"
+            result["success"] = True
+            return jsonify(result)
+        except Exception as e:
+            print(f"[ML] predict_today error: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
     # ─────────────────────────────────────────────────────────────────────────
 
     # Create database tables and initialize ML models
