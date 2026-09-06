@@ -25,7 +25,6 @@ const menuItems = [
   { label: 'Activity Logs',        href: '/admin/logs',        icon: Activity        },
   { label: 'Settings',             href: '/admin/settings',    icon: Settings        },
 ];
-
 export function AdminSidebar({ isOpen }: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -42,18 +41,18 @@ export function AdminSidebar({ isOpen }: AdminSidebarProps) {
   return (
     <>
       <aside
-        className={`h-full w-64 bg-background border-r border-[#f97316]/12 flex flex-col transition-all duration-300 ${
+        className={`h-full w-64 bg-card border-r border-[#f97316]/20 flex flex-col transition-all duration-300 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Logo */}
-        <div className="px-5 py-5 border-b border-[#f97316]/12 flex items-center gap-3">
+        <div className="px-5 py-5 border-b border-[#f97316]/20 flex items-center gap-3">
           <Image src="/logo-mark.png" alt="EyeGuard" width={30} height={30} className="h-8 w-8 object-contain" />
           <div>
             <h1 className="font-bold text-foreground text-sm">
               Eye<span className="text-[#f97316]">Guard</span>
             </h1>
-            <p className="text-[10px] text-[#fff7ed]/40">Admin Panel</p>
+            <p className="text-[10px] text-muted-foreground">Admin Panel</p>
           </div>
         </div>
 
@@ -67,8 +66,8 @@ export function AdminSidebar({ isOpen }: AdminSidebarProps) {
                 href={href}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
                   active
-                    ? 'bg-[#f97316]/15 text-[#f97316] border border-[#f97316]/20'
-                    : 'text-[#fff7ed]/45 hover:text-[#fff7ed] hover:bg-[#f97316]/8'
+                    ? 'bg-[#f97316]/15 text-[#f97316] border border-[#f97316]/25'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-[#f97316]/8'
                 }`}
               >
                 <Icon className="w-4 h-4 flex-shrink-0" />
@@ -80,7 +79,7 @@ export function AdminSidebar({ isOpen }: AdminSidebarProps) {
         </nav>
 
         {/* Footer */}
-        <div className="px-3 pb-4 pt-3 border-t border-[#f97316]/12 space-y-1">
+        <div className="px-3 pb-4 pt-3 border-t border-[#f97316]/20 space-y-1">
           <button
             onClick={() => router.push('/dashboard')}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#f97316] hover:bg-[#f97316]/10 transition-colors border border-[#f97316]/20 text-sm font-medium"
@@ -90,12 +89,12 @@ export function AdminSidebar({ isOpen }: AdminSidebarProps) {
           </button>
           <button
             onClick={() => setShowLogout(true)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#fff7ed]/40 hover:text-red-400 hover:bg-red-500/10 transition-colors text-sm font-medium"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors text-sm font-medium"
           >
             <LogOut className="w-4 h-4" />
             Sign out
           </button>
-          <p className="text-[10px] text-[#fff7ed]/25 text-center pt-1">EyeGuard Admin v1.0</p>
+          <p className="text-[10px] text-muted-foreground/60 text-center pt-1">EyeGuard Admin v2.0.1</p>
         </div>
       </aside>
 

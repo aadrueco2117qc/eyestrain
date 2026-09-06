@@ -163,7 +163,7 @@ export async function GET() {
     const beforeBreaks  = avg(beforeLogs.map(l => Number(l.breaks_taken) || 0))
     const recentBreaks  = avg(recentLogs.map(l => Number(l.breaks_taken) || 0))
 
-    // Symptom burden: CVS-Q weighted average (0–4 scale per symptom, eye strain & blurry vision weight 2)
+    // Symptom burden: weighted average (0–4 scale per symptom, eye strain & blurry vision weight 2)
     const symptomBurden = (ls: any[]) =>
       avg(ls.map(l =>
         ((freqToScore(l.eye_strain_frequency)    * 2) +

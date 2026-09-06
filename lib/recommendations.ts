@@ -34,21 +34,21 @@ interface WellnessTip {
 
 const HARDCODED_FALLBACK: RecommendationOutput[] = [
   {
-    title: 'Follow the 20-20-20 rule',
+    title: 'Adjust your monitor distance',
     description:
-      'Every 20 minutes, look at something 20 feet away for 20 seconds to relax your eye muscles.',
+      'Position your screen at arm\'s length (50–70 cm) and slightly below eye level to reduce neck and eye strain.',
     category: 'general',
   },
   {
-    title: 'Maintain optimal screen brightness (60-80%)',
+    title: 'Maintain optimal screen brightness (60–80%)',
     description:
-      'Keep your screen brightness between 60-80% to reduce eye strain and fatigue.',
+      'Keep your screen brightness between 60–80% to reduce glare and eye fatigue throughout the day.',
     category: 'brightness',
   },
   {
-    title: 'Get 7-9 hours of sleep per night',
+    title: 'Get 7–9 hours of sleep per night',
     description:
-      'Adequate sleep is essential for eye recovery. Aim for 7-9 hours of quality sleep each night.',
+      'Adequate sleep is essential for eye recovery. Aim for 7–9 hours of quality sleep each night.',
     category: 'sleep',
   },
 ]

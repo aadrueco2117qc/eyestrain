@@ -33,7 +33,7 @@ export default function PrivacyPolicyPage() {
           <Section title="1. Who We Are">
             EyeGuard is an academic research project by students of Our Lady of Fatima University,
             designed to study digital eye strain among Filipino college students using a validated
-            screening instrument (CVS-Q). This Privacy Policy explains how we collect, store, and
+            screening approach. This Privacy Policy explains how we collect, store, and
             use your personal data.
           </Section>
 

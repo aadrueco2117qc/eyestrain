@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Save, Eye, LogOut, KeyRound, EyeOff, CheckCircle2, AlertCircle, Bell } from 'lucide-react';
+import { Save, Eye, LogOut, KeyRound, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { MainLayout } from '@/components/main-layout';
 import { AuthGuard } from '@/components/auth-guard';
@@ -74,15 +74,6 @@ export default function SettingsPage() {
   const [showLogout, setShowLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  // Notification settings state
-  const [notifSettings, setNotifSettings] = useState({
-    enable_email_notifications: true,
-    enable_daily_reminders: true,
-    reminder_time: '09:00',
-  });
-  const [isSavingNotif, setIsSavingNotif] = useState(false);
-  const [notifMessage, setNotifMessage] = useState('');
-
   useEffect(() => {
     const loadUserData = async () => {
       try {
@@ -103,32 +94,32 @@ export default function SettingsPage() {
         if (profile) {
           const savedYearLevel = profile.year_level || '';
           const standardYearLevels = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Other'];
+          // Fall back to user_metadata for age if profile doesn't have it yet
+          const metaAge = authUser.user_metadata?.age?.toString() || '';
           setSettings((prev) => ({
             ...prev,
-            firstName: profile.first_name || '',
-            lastName: profile.last_name || '',
-            age: profile.age?.toString() || '',
+            firstName: profile.first_name || authUser.user_metadata?.name?.split(' ')[0] || '',
+            lastName:  profile.last_name  || authUser.user_metadata?.name?.split(' ').slice(1).join(' ') || '',
+            age: profile.age?.toString() || metaAge,
             gender: profile.gender || '',
             yearLevel: standardYearLevels.includes(savedYearLevel) ? savedYearLevel : savedYearLevel ? 'Other' : '',
             fieldOfStudy: profile.field_of_study || '',
           }));
           if (savedYearLevel && !standardYearLevels.includes(savedYearLevel)) setOtherYearLevel(savedYearLevel);
+        } else {
+          // No profile yet — pre-fill from user_metadata (set during signup)
+          const meta = authUser.user_metadata || {};
+          const nameParts = (meta.name || '').split(' ');
+          setSettings((prev) => ({
+            ...prev,
+            firstName: nameParts[0] || '',
+            lastName:  nameParts.slice(1).join(' ') || '',
+            age:       meta.age?.toString() || '',
+          }));
         }
 
-        // Load notification settings
-        const { data: userSettings } = await supabase
-          .from('user_settings')
-          .select('enable_email_notifications, enable_daily_reminders, reminder_time')
-          .eq('user_id', authUser.id)
-          .maybeSingle();
+        // Load notification settings removed — section deleted
 
-        if (userSettings) {
-          setNotifSettings({
-            enable_email_notifications: userSettings.enable_email_notifications ?? true,
-            enable_daily_reminders:     userSettings.enable_daily_reminders     ?? true,
-            reminder_time:              (userSettings.reminder_time ?? '09:00:00').slice(0, 5),
-          });
-        }
       } catch (err) {
         console.error('Error loading user data:', err);
       } finally {
@@ -203,34 +194,6 @@ export default function SettingsPage() {
       setPasswordMessage('Failed to change password. Please try again.');
     } finally {
       setIsChangingPassword(false);
-    }
-  };
-
-  const handleSaveNotifications = async () => {
-    if (!user) return;
-    setIsSavingNotif(true);
-    setNotifMessage('');
-    try {
-      const { error } = await supabase
-        .from('user_settings')
-        .upsert({
-          user_id: user.id,
-          enable_email_notifications: notifSettings.enable_email_notifications,
-          enable_daily_reminders:     notifSettings.enable_daily_reminders,
-          reminder_time:              notifSettings.reminder_time + ':00',
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' });
-
-      if (error) {
-        setNotifMessage(`Error: ${error.message}`);
-      } else {
-        setNotifMessage('Notification settings saved!');
-        setTimeout(() => setNotifMessage(''), 5000);
-      }
-    } catch {
-      setNotifMessage('Failed to save. Please try again.');
-    } finally {
-      setIsSavingNotif(false);
     }
   };
 
@@ -389,6 +352,7 @@ export default function SettingsPage() {
                     value={passwords.next}
                     onChange={(e) => setPasswords((p) => ({ ...p, next: e.target.value }))}
                     placeholder="Min. 8 characters"
+                    autoComplete="new-password"
                     className="w-full pr-10 px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                   <button
@@ -412,6 +376,7 @@ export default function SettingsPage() {
                     value={passwords.confirm}
                     onChange={(e) => setPasswords((p) => ({ ...p, confirm: e.target.value }))}
                     placeholder="Repeat new password"
+                    autoComplete="new-password"
                     className="w-full pr-10 px-3 py-2.5 border border-border rounded-xl bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                   <button
@@ -441,101 +406,6 @@ export default function SettingsPage() {
                   <KeyRound className="w-4 h-4" />
                 )}
                 {isChangingPassword ? 'Updating…' : 'Update Password'}
-              </button>
-            </div>
-          </Section>
-
-          {/* ── Notifications ── */}
-          <Section
-            title="Notifications"
-            description="Control when and how EyeGuard alerts you about your eye health"
-          >
-            <div className="space-y-5">
-              <StatusBanner message={notifMessage} />
-
-              {/* Email notifications toggle */}
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Email Notifications</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Receive high-risk alerts and reminders via email
-                  </p>
-                </div>
-                <button
-                  role="switch"
-                  aria-checked={notifSettings.enable_email_notifications}
-                  onClick={() => setNotifSettings(prev => ({ ...prev, enable_email_notifications: !prev.enable_email_notifications }))}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
-                    notifSettings.enable_email_notifications ? 'bg-primary' : 'bg-muted'
-                  }`}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                    notifSettings.enable_email_notifications ? 'translate-x-6' : 'translate-x-1'
-                  }`} />
-                </button>
-              </div>
-
-              {/* Daily reminder toggle */}
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Daily Log Reminders</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Get a reminder email if you haven't logged today
-                  </p>
-                </div>
-                <button
-                  role="switch"
-                  aria-checked={notifSettings.enable_daily_reminders}
-                  onClick={() => setNotifSettings(prev => ({ ...prev, enable_daily_reminders: !prev.enable_daily_reminders }))}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
-                    notifSettings.enable_daily_reminders ? 'bg-primary' : 'bg-muted'
-                  }`}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                    notifSettings.enable_daily_reminders ? 'translate-x-6' : 'translate-x-1'
-                  }`} />
-                </button>
-              </div>
-
-              {/* Reminder time picker — only shown when daily reminders are on */}
-              {notifSettings.enable_daily_reminders && (
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">
-                    Reminder Time
-                  </label>
-                  <input
-                    type="time"
-                    value={notifSettings.reminder_time}
-                    onChange={e => setNotifSettings(prev => ({ ...prev, reminder_time: e.target.value }))}
-                    className="w-40 px-3 py-2.5 border border-border rounded-xl bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    You'll receive a reminder at this time if you haven't logged yet
-                  </p>
-                </div>
-              )}
-
-              {/* High-risk alert note */}
-              <div className="flex items-start gap-3 p-3 rounded-xl bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800">
-                <Bell className="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-orange-800 dark:text-orange-200">
-                  <strong>High-risk alerts</strong> appear automatically on your dashboard and as an in-app notification whenever your risk score reaches High or Critical — regardless of these settings.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 pt-5 border-t border-border flex justify-end">
-              <button
-                onClick={handleSaveNotifications}
-                disabled={isSavingNotif}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground text-sm font-medium rounded-xl hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-              >
-                {isSavingNotif ? (
-                  <span className="w-4 h-4 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4" />
-                )}
-                {isSavingNotif ? 'Saving…' : 'Save Notifications'}
               </button>
             </div>
           </Section>
@@ -580,11 +450,11 @@ export default function SettingsPage() {
             <div className="divide-y divide-border">
               <div className="flex items-center justify-between py-3">
                 <span className="text-sm text-muted-foreground">Version</span>
-                <span className="text-sm font-semibold text-foreground">1.0.0</span>
+                <span className="text-sm font-semibold text-foreground">2.0.1</span>
               </div>
               <div className="flex items-center justify-between py-3">
                 <span className="text-sm text-muted-foreground">Last Updated</span>
-                <span className="text-sm font-semibold text-foreground">May 2026</span>
+                <span className="text-sm font-semibold text-foreground">September 2026</span>
               </div>
             </div>
           </Section>

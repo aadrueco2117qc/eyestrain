@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Bell, X, AlertTriangle, TrendingUp, Eye, CheckCircle, Clock } from 'lucide-react';
+import { Bell, X, AlertTriangle, Eye, CheckCircle, Clock, ShieldAlert } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type NotifLevel = 'critical' | 'high' | 'info' | 'success';
+type NotifLevel = 'critical' | 'high' | 'info' | 'success' | 'admin';
 
 interface Notification {
   id: string;
@@ -45,6 +45,12 @@ const LEVEL_STYLES: Record<NotifLevel, { icon: React.ReactNode; badge: string; d
     badge: 'bg-green-500',
     dot:   'bg-green-400',
     bg:    'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800',
+  },
+  admin: {
+    icon:  <ShieldAlert className="w-4 h-4 text-primary" />,
+    badge: 'bg-primary',
+    dot:   'bg-primary',
+    bg:    'bg-primary/8 border-primary/25',
   },
 };
 
@@ -186,6 +192,26 @@ export function NotificationBell() {
             });
           }
         }
+
+        // ── Fetch admin-sent push notifications ──────────────────────────────
+        try {
+          const res = await fetch('/api/notifications');
+          const { notifications: adminNotifs } = await res.json();
+          const severityToLevel: Record<string, NotifLevel> = {
+            critical: 'critical', high: 'high', info: 'admin',
+          };
+          for (const n of adminNotifs ?? []) {
+            built.unshift({                          // admin messages go to the top
+              id:        `admin-notif-${n.id}`,
+              level:     severityToLevel[n.severity] ?? 'admin',
+              title:     '📣 Message from EyeGuard Admin',
+              body:      n.content,
+              href:      undefined,
+              timestamp: n.created_at,
+              read:      false,
+            });
+          }
+        } catch { /* ignore — never block health notifications */ }
 
         // Cap at 10, mark read state from localStorage
         const capped = built.slice(0, 10).map(n => ({

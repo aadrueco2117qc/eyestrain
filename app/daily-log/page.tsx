@@ -13,6 +13,12 @@ import { Button } from '@/components/form-components';
 const CONSENT_KEY = 'eyeguard_research_consent';
 const NOTICE_REMINDER_KEY = 'eyeguard_research_notice_reminder';
 
+// Returns the user-scoped consent key so different accounts on the same
+// browser each get their own consent record.
+function consentKey(userId: string) {
+  return `${CONSENT_KEY}_${userId}`;
+}
+
 interface PreviousLogData {
   firstName?: string;
   lastName?: string;
@@ -48,6 +54,7 @@ export default function DailyLogPage() {
   const [checkingLog, setCheckingLog] = useState(true);
   const [previousLog, setPreviousLog] = useState<PreviousLogData | null>(null);
   const [userEmail, setUserEmail] = useState('');
+  const [userId, setUserId] = useState('');
   // null = loading, true = show modal, false = skip modal
   const [showConsent, setShowConsent] = useState<boolean | null>(null)
   const [agreedTerms, setAgreedTerms] = useState(false)
@@ -55,15 +62,17 @@ export default function DailyLogPage() {
   const [doNotShowAgain, setDoNotShowAgain] = useState(false);
 
   useEffect(() => {
-    // Check localStorage for consent preference
-    const stored = localStorage.getItem(CONSENT_KEY);
-    const reminderEnabled = localStorage.getItem(NOTICE_REMINDER_KEY) === 'enabled';
-    setShowConsent(stored !== 'accepted' || reminderEnabled);
-
     const loadUserData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
+
+        // ── Per-user consent check ────────────────────────────────────────
+        // Use a user-scoped key so each account gets its own consent record.
+        const userConsentKey = consentKey(user.id);
+        const stored = localStorage.getItem(userConsentKey);
+        const reminderEnabled = localStorage.getItem(NOTICE_REMINDER_KEY) === 'enabled';
+        setShowConsent(stored !== 'accepted' || reminderEnabled);
 
         const today = new Date().toISOString().split('T')[0];
 
@@ -103,6 +112,7 @@ export default function DailyLogPage() {
         const last = lastLogResult.data as Record<string, any> | null;
 
         setUserEmail(user.email || '');
+        setUserId(user.id);
 
         if (profile || last) {
           setPreviousLog({
@@ -137,7 +147,7 @@ export default function DailyLogPage() {
   }, [supabase]);
 
   const handleConsent = () => {
-    localStorage.setItem(CONSENT_KEY, 'accepted')
+    if (userId) localStorage.setItem(consentKey(userId), 'accepted')
     // If "don't show again" is checked, disable the reminder in localStorage
     if (doNotShowAgain) {
       localStorage.removeItem(NOTICE_REMINDER_KEY)
@@ -247,18 +257,18 @@ export default function DailyLogPage() {
               )}
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
-                  onClick={() => router.push('/dashboard')}
+                  onClick={() => router.push('/risk-prediction')}
                   className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 bg-primary text-primary-foreground text-sm font-semibold rounded-xl hover:bg-primary/90 transition-colors"
                 >
-                  <LayoutDashboard className="w-4 h-4" />
-                  View Dashboard
+                  View Risk Assessment
+                  <ArrowRight className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => router.push('/risk-prediction')}
+                  onClick={() => router.push('/dashboard')}
                   className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 border border-border text-foreground text-sm font-medium rounded-xl hover:bg-muted transition-colors"
                 >
-                  Full Analysis
-                  <ArrowRight className="w-4 h-4" />
+                  <LayoutDashboard className="w-4 h-4" />
+                  Dashboard
                 </button>
               </div>
             </div>

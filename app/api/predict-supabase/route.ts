@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     const exerciseFreq    = formData.exerciseFrequency ?? ''; // 'None'|'Minimal'|'Moderate'|'Regular'
     const outdoorTime     = formData.outdoorTime      ?? '';  // '<30min'|'30min–1h'|'1–2h'|'>2h'
 
-    // ── STEP 1 — CVS-Q Symptom Score (primary, max raw = 12) ─────────────────
+    // ── STEP 1 — Symptom Score (primary, max raw = 12) ─────────────────
     // Weighted per Seguí et al. 2015 (J Clin Epidemiol):
     //   Eye strain + Blurry vision : weight 2 each (hallmark CVS symptoms)
     //   Headaches  + Dry eyes      : weight 1 each (secondary symptoms)
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     const headachesFreq    = freqMap[formData.headachesFrequency    ?? ''] ?? (symptoms.includes('headaches')    ? 1.0 : 0);
     const dryEyesFreq      = freqMap[formData.dryEyesFrequency      ?? ''] ?? (symptoms.includes('dryEyes')      ? 1.0 : 0);
 
-    // CVS-Q raw score (0–12) → normalised 0–100
+    // Symptom raw score (0–12) → normalised 0–100
     const cvqRawScore =
       (eyeStrainFreq    * 2) +
       (blurryVisionFreq * 2) +
@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
     riskScore = parseFloat(riskScore.toFixed(1));
 
     // ── STEP 5 — Risk level thresholds ───────────────────────────────────────
-    // Aligned with CVS-Q clinical threshold (≥6/12 = 50% → High)
+    // Aligned with clinical threshold (≥6/12 = 50% → High)
     let riskLevel = 0;
     if      (riskScore < 25) riskLevel = 0; // Low
     else if (riskScore < 50) riskLevel = 1; // Moderate

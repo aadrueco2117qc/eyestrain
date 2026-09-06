@@ -76,7 +76,7 @@ export default function LoginPage() {
           <div className="space-y-4 text-left">
             {[
               { n: '01', title: 'Log Daily',       desc: 'Track screen time, symptoms, and habits' },
-              { n: '02', title: 'Get Your Score',   desc: 'CVS-Q validated risk assessment' },
+              { n: '02', title: 'Get Your Score',   desc: 'AI-powered eye strain risk assessment' },
               { n: '03', title: 'Improve',          desc: 'Follow personalised recommendations' },
             ].map(({ n, title, desc }) => (
               <div key={n} className="flex items-start gap-4">

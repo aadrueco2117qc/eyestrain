@@ -450,18 +450,19 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
         '2–4 hours': 3,
         '4–6 hours': 5,
         '6–8 hours': 7,
-        'More than 8 hours': 10,
+        'More than 8 hours': 8,
       }[formData.academicScreenTime] || 0;
 
       const nonAcademicHours = {
         'Less than 1 hour': 0.5,
         '1–3 hours': 2,
         '3–5 hours': 4,
-        '5–7 hours': 6,
-        'More than 7 hours': 8,
+        '5–7 hours': 5.5,
+        'More than 7 hours': 6,
       }[formData.nonAcademicScreenTime] || 0;
 
-      const totalScreenTime = academicHours + nonAcademicHours;
+      // Cap total at 12h — combining both categories can't realistically exceed a waking day
+      const totalScreenTime = Math.min(academicHours + nonAcademicHours, 12);
 
       // Map symptom frequencies to 0-4 scale
       const frequencyMap = {
@@ -570,8 +571,8 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
                 type="text"
                 value={formData.firstName}
                 onChange={(e) => handleInputChange('firstName', e.target.value)}
-                placeholder="e.g. Alessi"
-                className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                placeholder="e.g. Juan"
+                className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
               />
             </FormField>
             <FormField label="Last Name" fieldId="lastName">
@@ -581,8 +582,8 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
                 type="text"
                 value={formData.lastName}
                 onChange={(e) => handleInputChange('lastName', e.target.value)}
-                placeholder="e.g. Esquivel"
-                className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                placeholder="e.g. Dela Cruz"
+                className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
               />
             </FormField>
           </div>
@@ -593,7 +594,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
               ref={(el) => { fieldRefs.current['age'] = el; }}
               value={formData.age || ''}
               onChange={(e) => handleInputChange('age', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
+              className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
               required
             >
               <option value="">Select your age range</option>
@@ -611,7 +612,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
               ref={(el) => { fieldRefs.current['gender'] = el; }}
               value={formData.gender || ''}
               onChange={(e) => handleInputChange('gender', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
+              className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
               required
             >
               <option value="">Select your gender</option>
@@ -629,7 +630,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
               ref={(el) => { fieldRefs.current['yearLevel'] = el; }}
               value={formData.yearLevel || ''}
               onChange={(e) => handleInputChange('yearLevel', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
+              className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
               required
             >
               <option value="">Select your year level</option>
@@ -649,7 +650,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
                   setError('');
                 }}
                 placeholder="Type your year level"
-                className="w-full mt-3 px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full mt-3 px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                 required
               />
             )}
@@ -664,7 +665,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
                 handleInputChange('fieldOfStudy', e.target.value);
                 if (e.target.value !== 'Other') setOtherFieldOfStudy('');
               }}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
+              className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
               required
             >
               <option value="">Select your field of study</option>
@@ -684,7 +685,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
                   setError('');
                 }}
                 placeholder="Type your field of study"
-                className="w-full mt-3 px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full mt-3 px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                 required
               />
             )}
@@ -791,7 +792,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
               ref={(el) => { fieldRefs.current['eyeStrainFrequency'] = el; }}
               value={formData.eyeStrainFrequency}
               onChange={(e) => handleInputChange('eyeStrainFrequency', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
+              className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
               required
             >
               <option value="">Select frequency</option>
@@ -807,7 +808,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
               ref={(el) => { fieldRefs.current['headachesFrequency'] = el; }}
               value={formData.headachesFrequency}
               onChange={(e) => handleInputChange('headachesFrequency', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
+              className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
               required
             >
               <option value="">Select frequency</option>
@@ -823,7 +824,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
               ref={(el) => { fieldRefs.current['blurryVisionFrequency'] = el; }}
               value={formData.blurryVisionFrequency}
               onChange={(e) => handleInputChange('blurryVisionFrequency', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
+              className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
               required
             >
               <option value="">Select frequency</option>
@@ -839,7 +840,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
               ref={(el) => { fieldRefs.current['dryEyesFrequency'] = el; }}
               value={formData.dryEyesFrequency}
               onChange={(e) => handleInputChange('dryEyesFrequency', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
+              className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
               required
             >
               <option value="">Select frequency</option>
@@ -862,7 +863,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
               ref={(el) => { fieldRefs.current['exerciseFrequency'] = el; }}
               value={formData.exerciseFrequency}
               onChange={(e) => handleInputChange('exerciseFrequency', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
+              className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
               required
             >
               <option value="">Select frequency</option>
@@ -878,7 +879,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
               ref={(el) => { fieldRefs.current['outdoorTime'] = el; }}
               value={formData.outdoorTime}
               onChange={(e) => handleInputChange('outdoorTime', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
+              className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
               required
             >
               <option value="">Select duration</option>
@@ -894,7 +895,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
               ref={(el) => { fieldRefs.current['blueLight'] = el; }}
               value={formData.blueLight}
               onChange={(e) => handleInputChange('blueLight', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
+              className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
               required
             >
               <option value="">Select option</option>
@@ -917,7 +918,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
               ref={(el) => { fieldRefs.current['screenHeight'] = el; }}
               value={formData.screenHeight}
               onChange={(e) => handleInputChange('screenHeight', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
+              className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
               required
             >
               <option value="">Select position</option>
@@ -933,7 +934,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
               ref={(el) => { fieldRefs.current['screenDistance'] = el; }}
               value={formData.screenDistance}
               onChange={(e) => handleInputChange('screenDistance', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
+              className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
               required
             >
               <option value="">Select distance</option>
@@ -949,7 +950,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
               ref={(el) => { fieldRefs.current['roomLighting'] = el; }}
               value={formData.roomLighting}
               onChange={(e) => handleInputChange('roomLighting', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
+              className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
               required
             >
               <option value="">Select lighting</option>
@@ -972,7 +973,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
               ref={(el) => { fieldRefs.current['sleepHours'] = el; }}
               value={formData.sleepHours || ''}
               onChange={(e) => handleInputChange('sleepHours', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
+              className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
               required
             >
               <option value="">Select average sleep</option>
@@ -1016,7 +1017,7 @@ export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues
               }}
               placeholder="Any additional information about your eye health, work environment, or daily habits that might be relevant..."
               rows={5}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
               autoComplete="off"
             />
           </FormField>

@@ -49,8 +49,8 @@ export default function TermsOfServicePage() {
           <Section title="3. Nature of the Service">
             <p>
               EyeGuard is a <strong className="text-foreground">screening and awareness tool</strong>, not a
-              medical device or clinical service. It uses the Computer Vision Syndrome Questionnaire
-              (CVS-Q) and published ergonomics guidelines to estimate eye strain risk from
+              medical device or clinical service. It uses a research-backed scoring model and
+              published ergonomics guidelines to estimate eye strain risk from
               self-reported data. It is not intended to diagnose, treat, cure, or prevent any
               medical condition.
             </p>

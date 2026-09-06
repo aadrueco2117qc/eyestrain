@@ -43,7 +43,7 @@ Based on the **Computer Vision Syndrome Questionnaire (CVS-Q)** by Seguí et al.
 | Often (5–6× / week) | 1.5 |
 | Always (every day) | 2.0 |
 
-**CVS-Q raw score range:** 0–12  
+**Raw symptom score range:** 0–12  
 **Normalised symptom score:** `(raw / 12) × 100` → 0–100
 
 If the user reports no symptoms, the symptom score is 0 and only the exposure path applies (capped at 35%).
@@ -344,7 +344,7 @@ The daily risk scores that users see in the app (dashboard, risk prediction page
 1. It is fully **explainable** — every point can be traced to a specific input and a cited guideline
 2. It does not require the Flask server to be running
 3. It does not hallucinate — it cannot produce scores that contradict the input data
-4. Clinical thresholds (CVS-Q, AOA, ISO, NSF) provide academic grounding for the capstone
+4. Clinical thresholds (AOA, ISO, NSF, peer-reviewed research) provide academic grounding for the capstone
 
 The Flask ML models would take over as primary if the codebase were extended to call `POST /api/ml/predict` from the daily log submission flow instead of the rule-based route.
 

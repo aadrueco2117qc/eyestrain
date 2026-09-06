@@ -158,7 +158,7 @@ export default function Home() {
             <p className="text-base sm:text-lg text-[#fff7ed]/55 max-w-md mt-5 leading-relaxed">
               EyeGuard is a student research prototype exploring how daily screen habits
               and symptoms relate to Computer Vision Syndrome — using machine learning
-              and CVS-Q scoring. Join the experiment, log your day, and see what the data shows.
+              and evidence-based scoring. Join the experiment, log your day, and see what the data shows.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 mt-8">
@@ -260,15 +260,15 @@ export default function Home() {
               },
             },
             {
-              icon: <Image src="/icon_reference.png" alt="CVS-Q scoring" width={20} height={20} className="object-contain" />,
+              icon: <Image src="/icon_reference.png" alt="Risk scoring" width={20} height={20} className="object-contain" />,
               iconBg: 'bg-[#fb923c]/15 text-[#fb923c]',
-              title: 'CVS-Q Risk Scoring',
-              desc: 'Risk is calculated using the clinically validated Computer Vision Syndrome Questionnaire (Seguí et al., 2015).',
+              title: 'Eye Strain Risk Scoring',
+              desc: 'Risk is calculated using a research-backed model trained on published eye health guidelines and clinical symptom data.',
               href: '/risk-prediction',
               detail: {
                 heading: 'Science-backed eye strain scoring',
                 bullets: [
-                  'Based on the CVS-Q scale validated in clinical research',
+                  'Based on published clinical research and eye health guidelines',
                   'Scores range across Low, Moderate, High, and Critical',
                   'Powered by a trained machine-learning model',
                   'Updates automatically as you log more data',
@@ -380,10 +380,10 @@ export default function Home() {
                               stroke="url(#pvGrad)"
                               strokeWidth="3"
                               strokeLinecap="round"
-                              strokeDasharray={((activeFeature.title === 'Daily Eye Health Log' ? 75 : activeFeature.title === 'CVS-Q Risk Scoring' ? 62 : 88) * 0.628) + ' 100'}
+                              strokeDasharray={((activeFeature.title === 'Daily Eye Health Log' ? 75 : activeFeature.title === 'Eye Strain Risk Scoring' ? 62 : 88) * 0.628) + ' 100'}
                             />
                             <text x="18" y="20.5" textAnchor="middle" className="text-sm font-semibold" fill="#fff7ed" style={{fontSize: '7px'}}> 
-                              {(activeFeature.title === 'Daily Eye Health Log' ? 75 : activeFeature.title === 'CVS-Q Risk Scoring' ? 62 : 88)}%
+                              {(activeFeature.title === 'Daily Eye Health Log' ? 75 : activeFeature.title === 'Eye Strain Risk Scoring' ? 62 : 88)}%
                             </text>
                           </svg>
                         </div>
