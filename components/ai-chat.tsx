@@ -97,7 +97,22 @@ export function AiChat({ mode, initialMessage }: AiChatProps) {
                 ? 'bg-[#f97316]/8 text-[#fff7ed]/85 rounded-tl-sm border border-[#f97316]/10'
                 : 'bg-[#f97316] text-[#0f0a07] rounded-tr-sm font-medium'
             }`}>
-              {msg.content}
+              {msg.role === 'assistant'
+                ? msg.content
+                    .replace(/^#{1,6}\s+/gm, '')         // strip # headings
+                    .replace(/\*\*(.+?)\*\*/g, '$1')     // strip **bold**
+                    .replace(/\*(.+?)\*/g, '$1')          // strip *italic*
+                    .replace(/^[-•]\s+/gm, '• ')         // normalise bullets
+                    .replace(/---+/g, '')                 // strip dividers
+                    .trim()
+                    .split('\n')
+                    .filter(line => line.trim() !== '')
+                    .map((line, i, arr) => (
+                      <span key={i} className={`block ${i < arr.length - 1 ? 'mb-1' : ''}`}>
+                        {line}
+                      </span>
+                    ))
+                : msg.content}
             </div>
           </div>
         ))}
