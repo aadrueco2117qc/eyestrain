@@ -332,7 +332,7 @@ export default function RiskPredictionPage() {
 
               {/* Hero gauge card */}
               <div className={`rounded-2xl border-2 p-5 sm:p-6 ${meta.card}`}>
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground mb-4">Eye Strain Risk Score</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground mb-4">EyeGuard Behavioral Score</p>
                 <div className="flex items-center gap-4 mb-5 flex-wrap">
                   <div className="flex items-baseline gap-1.5">
                     <span className={`text-5xl sm:text-6xl font-bold tabular-nums leading-none ${meta.text}`}>
@@ -362,6 +362,231 @@ export default function RiskPredictionPage() {
                    '✓ Great! Your risk is low. Keep up your current habits!'}
                 </p>
               </div>
+
+              {/* ── CVS-Smart + EyeGuard score cards ──────────────────────── */}
+              {(() => {
+                const cvsqScore  = prediction.cvsq_score  ?? null;
+                const cvsqStatus = prediction.cvsq_status ?? '—';
+                const cvsqQ1     = prediction.cvsq_q1 ?? null;
+                const cvsqQ2     = prediction.cvsq_q2 ?? null;
+                const cvsqQ3     = prediction.cvsq_q3 ?? null;
+                const cvsqQ4     = prediction.cvsq_q4 ?? null;
+                const cvsqQ5     = prediction.cvsq_q5 ?? null;
+                const concordant = prediction.concordant;
+                const scenario   = prediction.concordance_scenario;
+
+                const cvsqTier = cvsqScore == null ? 0 : cvsqScore >= 7 ? 3 : cvsqScore >= 5 ? 2 : cvsqScore >= 3 ? 1 : 0;
+                const CVSQ_META = {
+                  0: { text: 'text-green-500  dark:text-green-400',  bg: 'bg-green-500',  card: 'border-green-500/30  bg-green-500/5'  },
+                  1: { text: 'text-yellow-500 dark:text-yellow-400', bg: 'bg-yellow-500', card: 'border-yellow-500/30 bg-yellow-500/5' },
+                  2: { text: 'text-orange-500 dark:text-orange-400', bg: 'bg-orange-500', card: 'border-orange-500/30 bg-orange-500/5' },
+                  3: { text: 'text-red-500    dark:text-red-400',    bg: 'bg-red-500',    card: 'border-red-500/30    bg-red-500/5'    },
+                } as const;
+                const cm = CVSQ_META[cvsqTier as 0|1|2|3];
+
+                const cvsqAction =
+                  cvsqScore == null ? 'Submit the survey to see your CVS-Smart result.' :
+                  cvsqScore >= 7 ? 'Consult an ophthalmologist — this score indicates confirmed CVS.' :
+                  cvsqScore >= 5 ? 'Consider confirming with an eye care professional to rule out CVS.' :
+                  cvsqScore >= 3 ? 'Low probability of CVS. Monitor symptoms, recheck every 6 months.' :
+                  cvsqScore >= 1 ? 'No CVS detected. Continue following protective screen habits.' :
+                  'No CVS symptoms detected. Keep up your current habits.';
+
+                // Plain-language score explanations
+                const cvsqExplain = (() => {
+                  if (cvsqQ1 == null) return 'The CVS-Smart score sums five sub-scores (0–2 pts each, max 10). Submit the survey to see your breakdown.';
+                  const lines: string[] = [];
+                  if (cvsqQ1 === 0) lines.push('No visual complaints (blurred vision, eye strain, halos, etc.) → 0 pts.');
+                  else if (cvsqQ1 === 1) lines.push('1 visual complaint → 1 pt.');
+                  else lines.push('2+ visual complaints → 2 pts.');
+                  if (cvsqQ2 === 0) lines.push('No ocular surface complaints (dry eyes, redness, irritation, etc.) → 0 pts.');
+                  else if (cvsqQ2 === 1) lines.push('1 ocular surface complaint → 1 pt.');
+                  else lines.push('2+ ocular surface complaints → 2 pts.');
+                  if (cvsqQ3 === 0) lines.push('No extraocular complaints (headaches, neck/back pain, etc.) → 0 pts.');
+                  else if (cvsqQ3 === 1) lines.push('1 extraocular complaint → 1 pt.');
+                  else lines.push('2+ extraocular complaints → 2 pts.');
+                  lines.push(`Complaint frequency: ${['Rare — less than twice a month', 'Infrequent — about once or twice a week', 'Frequent — most days'][cvsqQ4 ?? 0]} → ${cvsqQ4} pt${cvsqQ4 === 1 ? '' : 's'}.`);
+                  lines.push(`Screen association: ${['Never linked to screen use', 'Sometimes occur during screen use', 'Always occur during screen use'][cvsqQ5 ?? 0]} → ${cvsqQ5} pt${cvsqQ5 === 1 ? '' : 's'}.`);
+                  lines.push(`Total: ${cvsqScore}/10 → ${cvsqStatus}.`);
+                  return lines.join(' ');
+                })();
+
+                const egExplain = (() => {
+                  const lines: string[] = [];
+                  const activeSyms = [
+                    ['Blurred vision', latestLog?.sym_blurred_vision],
+                    ['Dry eyes', latestLog?.sym_dry_eyes],
+                    ['Eye irritation', latestLog?.sym_eye_irritation],
+                    ['Headaches', latestLog?.sym_headaches],
+                    ['Light sensitivity', latestLog?.sym_light_sensitivity],
+                    ['Difficulty focusing', latestLog?.sym_difficulty_focusing],
+                    ['Mental fatigue', latestLog?.sym_mental_fatigue],
+                    ['Neck/shoulder pain', latestLog?.sym_neck_shoulder_pain],
+                    ['Eye itchiness', latestLog?.sym_eye_itchiness],
+                  ].filter(([, v]) => v && v !== 'Never') as [string, string][];
+                  if (activeSyms.length === 0) lines.push('You reported no symptoms — symptom score is 0.');
+                  else lines.push(`Symptoms: ${activeSyms.map(([n, f]) => `${n} (${f})`).join(', ')}. These add the most points.`);
+                  if (screenTime >= 8) lines.push(`Screen time ${screenTime}h — above the safe limit, adds significant points.`);
+                  else if (screenTime >= 5) lines.push(`Screen time ${screenTime}h — moderately high, adds some points.`);
+                  else if (screenTime > 0) lines.push(`Screen time ${screenTime}h — within a manageable range.`);
+                  if (sleepHours < 6) lines.push(`Sleep ${sleepHours}h — well below the 7–9h optimal, adds points.`);
+                  else if (sleepHours < 7) lines.push(`Sleep ${sleepHours}h — slightly below optimal, minor penalty.`);
+                  else lines.push(`Sleep ${sleepHours}h — healthy range, no penalty.`);
+                  if (brightness < 40) lines.push(`Screen brightness ${brightness}% is too dim — causes squinting strain, adds points.`);
+                  else if (brightness > 80) lines.push(`Screen brightness ${brightness}% is too bright — glare strain, adds points.`);
+                  else lines.push(`Screen brightness ${brightness}% is in the optimal 40–80% range.`);
+                  if (latestLog?.follows_20_20_20 === 'Always') lines.push('You follow the 20-20-20 rule — reduces your score.');
+                  if (latestLog?.break_frequency === 'Rarely take breaks') lines.push('Rarely taking breaks adds points.');
+                  if (latestLog?.dark_room_use === 'Always') lines.push('Always using screens in dark rooms adds points.');
+                  return lines.join(' ');
+                })();
+
+                return (
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#f97316]">Daily log result</p>
+                      <h2 className="text-2xl font-bold text-foreground mt-1">Your Assessment Scores</h2>
+                      <p className="text-sm text-muted-foreground mt-0.5">Two separate instruments — each tells you something different about your eye health.</p>
+                    </div>
+
+                    {/* CVS-Smart card */}
+                    <div className={`rounded-2xl border-2 overflow-hidden ${cm.card}`}>
+                      <div className="flex flex-col sm:flex-row sm:items-start">
+                        {/* Score column */}
+                        <div className="flex-shrink-0 px-7 py-6 sm:w-56 sm:border-r border-white/10 flex flex-col gap-2">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">CVS-Smart Score</p>
+                          <div className="flex items-end gap-1.5">
+                            <span className={`text-8xl font-extrabold tabular-nums leading-none ${cm.text}`}>{cvsqScore ?? '—'}</span>
+                            <span className="text-3xl font-semibold text-muted-foreground pb-2">/ 10</span>
+                          </div>
+                          <p className={`text-base font-bold ${cm.text}`}>{cvsqStatus}</p>
+                          <div className="space-y-1 mt-1">
+                            <div className="h-2.5 rounded-full bg-black/15 dark:bg-white/10 overflow-hidden">
+                              <div className={`h-full rounded-full ${cm.bg} transition-all duration-700`} style={{ width: `${cvsqScore != null ? (cvsqScore / 10) * 100 : 0}%` }} />
+                            </div>
+                            <div className="flex justify-between text-[9px] text-muted-foreground"><span>0</span><span>3</span><span>5</span><span>7</span><span>10</span></div>
+                          </div>
+                        </div>
+                        {/* Details column */}
+                        <div className="flex-1 px-6 py-6 space-y-3">
+                          {cvsqQ1 != null && (
+                            <div className="flex flex-wrap gap-2">
+                              {[
+                                { label: 'Visual',        val: cvsqQ1 },
+                                { label: 'Ocular',        val: cvsqQ2 },
+                                { label: 'Extraocular',   val: cvsqQ3 },
+                                { label: 'Frequency',     val: cvsqQ4 },
+                                { label: 'Screen-linked', val: cvsqQ5 },
+                              ].map(({ label, val }) => (
+                                <span key={label} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-semibold ${
+                                  val === 2 ? `${cm.text} border-current bg-current/10` :
+                                  val === 1 ? 'text-yellow-500 border-yellow-400/40 bg-yellow-400/10' :
+                                  'text-muted-foreground border-border bg-muted/30'}`}>
+                                  <span className="font-extrabold">{val}/2</span>
+                                  <span className="font-normal opacity-75">{label}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <p className={`text-sm font-medium leading-relaxed ${cm.text}`}>{cvsqAction}</p>
+                        </div>
+                      </div>
+                      <details className="group border-t border-white/10">
+                        <summary className="flex items-center justify-between gap-3 px-6 py-3 cursor-pointer list-none hover:bg-white/5 transition-colors select-none">
+                          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">How this score was calculated</span>
+                          <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180 flex-shrink-0" />
+                        </summary>
+                        <div className="px-6 pb-5 pt-2 border-t border-white/5">
+                          <p className="text-sm text-muted-foreground leading-relaxed">{cvsqExplain}</p>
+                        </div>
+                      </details>
+                    </div>
+
+                    {/* EyeGuard card */}
+                    <div className={`rounded-2xl border-2 overflow-hidden ${meta.card}`}>
+                      <div className="flex flex-col sm:flex-row sm:items-start">
+                        {/* Score column */}
+                        <div className="flex-shrink-0 px-7 py-6 sm:w-56 sm:border-r border-white/10 flex flex-col gap-2">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">EyeGuard Score</p>
+                          <div className="flex items-end gap-1.5">
+                            <span className={`text-8xl font-extrabold tabular-nums leading-none ${meta.text}`}>{riskPct.toFixed(0)}</span>
+                            <span className="text-3xl font-semibold text-muted-foreground pb-2">/ 100</span>
+                          </div>
+                          <div className={`inline-flex items-center gap-1.5 text-base font-bold ${meta.text}`}>
+                            {riskLvl === 0 && <CheckCircle2 className="w-4 h-4" />}
+                            {riskLvl === 1 && <Activity className="w-4 h-4" />}
+                            {riskLvl >= 2 && <AlertTriangle className="w-4 h-4" />}
+                            {meta.label}
+                          </div>
+                          <div className="space-y-1 mt-1">
+                            <div className="h-2.5 rounded-full bg-black/15 dark:bg-white/10 overflow-hidden">
+                              <div className={`h-full rounded-full ${meta.bg} transition-all duration-700`} style={{ width: `${riskPct}%` }} />
+                            </div>
+                            <div className="flex justify-between text-[9px] text-muted-foreground"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
+                          </div>
+                        </div>
+                        {/* Details column */}
+                        <div className="flex-1 px-6 py-6 space-y-3">
+                          <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                            {[
+                              { label: 'Symptoms',    pct: Math.min(100, (cvqRaw / 12) * 100),    color: cvqRaw >= 8 ? 'bg-red-500' : cvqRaw >= 4 ? 'bg-yellow-500' : 'bg-green-500' },
+                              { label: 'Screen time', pct: Math.min(100, (screenTime / 12) * 100), color: screenTime >= 8 ? 'bg-red-500' : screenTime >= 5 ? 'bg-yellow-500' : 'bg-green-500' },
+                              { label: 'Sleep',       pct: Math.min(100, Math.max(0, ((9 - sleepHours) / 5) * 100)), color: sleepHours < 6 ? 'bg-red-500' : sleepHours < 7 ? 'bg-yellow-500' : 'bg-green-500' },
+                              { label: 'Brightness',  pct: Math.min(100, (Math.max(0, brightness < 40 ? 40 - brightness : brightness > 80 ? brightness - 80 : 0) / 40) * 100), color: 'bg-orange-400' },
+                            ].map(({ label, pct, color }) => (
+                              <div key={label} className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground w-24 flex-shrink-0">{label}</span>
+                                <div className="flex-1 h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                                  <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+                                </div>
+                                <span className="text-xs text-muted-foreground w-9 text-right tabular-nums">{pct.toFixed(0)}%</span>
+                              </div>
+                            ))}
+                          </div>
+                          <p className={`text-sm font-medium leading-relaxed ${meta.text}`}>
+                            {riskLvl === 3 ? '⚠ Critical: rest your eyes immediately and consider consulting an eye care professional.' :
+                             riskLvl === 2 ? 'High: reduce screen time, follow the 20-20-20 rule, and act on the recommendations below.' :
+                             riskLvl === 1 ? 'Moderate: small habit improvements can lower your score before symptoms develop.' :
+                             '✓ Low risk — your screen habits and environment are within a healthy range.'}
+                          </p>
+                        </div>
+                      </div>
+                      <details className="group border-t border-white/10">
+                        <summary className="flex items-center justify-between gap-3 px-6 py-3 cursor-pointer list-none hover:bg-white/5 transition-colors select-none">
+                          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">How this score was calculated</span>
+                          <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180 flex-shrink-0" />
+                        </summary>
+                        <div className="px-6 pb-5 pt-2 border-t border-white/5">
+                          <p className="text-sm text-muted-foreground leading-relaxed">{egExplain}</p>
+                        </div>
+                      </details>
+                    </div>
+
+                    {/* Concordance banner */}
+                    {concordant != null && (
+                      <div className={`rounded-2xl border p-4 flex gap-3 items-start ${
+                        concordant ? 'border-green-500/30 bg-green-500/5' :
+                        scenario === 'cvsq_high_eyeguard_low' ? 'border-orange-500/30 bg-orange-500/5' :
+                        'border-blue-500/30 bg-blue-500/5'
+                      }`}>
+                        <span className="text-xl flex-shrink-0 mt-0.5">{concordant ? '✅' : scenario === 'cvsq_high_eyeguard_low' ? '⚠️' : '💡'}</span>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">
+                            {concordant ? 'Both instruments agree on your risk level' :
+                             scenario === 'cvsq_high_eyeguard_low' ? 'CVS-Smart detects active symptoms; EyeGuard sees relatively healthy habits' :
+                             'EyeGuard detects risky habits; no active CVS symptoms reported yet'}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                            {concordant ? 'The CVS-Smart clinical score and your EyeGuard behavioral score point to the same severity level. This cross-validation strengthens the reliability of your result.' :
+                             scenario === 'cvsq_high_eyeguard_low' ? 'Your CVS-Smart score suggests symptoms consistent with CVS, but your behavioral habits are relatively healthy. Consider consulting an eye care professional.' :
+                             'You haven\'t reported significant active symptoms yet, but your screen habits match a known early-warning risk pattern for CVS. Acting now can prevent symptoms from developing.'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Contributing factors */}
               <div>
@@ -479,8 +704,8 @@ export default function RiskPredictionPage() {
             Positioned from right edge of page, vertically
             spanning the full content area.
         ══════════════════════════════════════════════════════ */}
-        <div className="hidden lg:flex fixed bottom-0 w-[420px] xl:w-[480px] flex-col items-stretch gap-3 px-4 pt-6 pb-4 pointer-events-none z-20"
-          style={{ left: '64%', top: '7rem' }}>
+        <div className="hidden lg:flex fixed bottom-0 w-[420px] xl:w-[460px] flex-col items-stretch gap-3 px-4 pt-6 pb-4 pointer-events-none z-20"
+          style={{ left: '60%', top: '7rem' }}>
 
           {/* Bubble — pointer-events back on so it's readable */}
           <div className="pointer-events-auto">

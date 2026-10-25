@@ -181,10 +181,20 @@ export async function selectRecommendations(
       addTips(data as WellnessTip[])
     }
 
-    // Step 5–6: Deduplicate (already done via Map) + sort by priority desc
+    // Step 5–6: Deduplicate by ID (Map) then by title, then sort by priority desc
     let result = Array.from(candidateMap.values()).sort(
       (a, b) => b.priority - a.priority,
     )
+
+    // Title-level dedup: two DB rows with different IDs but identical titles
+    // (e.g. one tagged symptom_type and another tagged risk_level) would both
+    // survive the Map — this pass removes the lower-priority duplicate.
+    const seenTitles = new Set<string>()
+    result = result.filter(t => {
+      if (seenTitles.has(t.title)) return false
+      seenTitles.add(t.title)
+      return true
+    })
 
     // Step 7: Cap at 8
     if (result.length > 8) {
