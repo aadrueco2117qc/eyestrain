@@ -97,10 +97,10 @@ export default function AnalyticsPage() {
     const avgScreenTime = filteredLogs.reduce((s: number, l: any) => s + (l.screen_time || 0), 0) / n;
     const totalHours = filteredLogs.reduce((s: number, l: any) => s + (l.screen_time || 0), 0);
 
-    const eyeStrainCount = filteredLogs.filter((l: any) => l.eye_strain === 1).length;
-    const headachesCount = filteredLogs.filter((l: any) => l.headaches === 1).length;
-    const dryEyesCount = filteredLogs.filter((l: any) => l.dry_eyes === 1).length;
-    const blurryVisionCount = filteredLogs.filter((l: any) => l.blurry_vision === 1).length;
+    const eyeStrainCount    = filteredLogs.filter((l: any) => l.sym_eye_irritation   && l.sym_eye_irritation   !== 'Never').length;
+    const headachesCount    = filteredLogs.filter((l: any) => l.sym_headaches         && l.sym_headaches         !== 'Never').length;
+    const dryEyesCount      = filteredLogs.filter((l: any) => l.sym_dry_eyes          && l.sym_dry_eyes          !== 'Never').length;
+    const blurryVisionCount = filteredLogs.filter((l: any) => l.sym_blurred_vision    && l.sym_blurred_vision    !== 'Never').length;
 
     const symptomFrequency = {
       'Eye Strain': Math.round((eyeStrainCount / n) * 100),
@@ -134,44 +134,72 @@ export default function AnalyticsPage() {
     };
   }, [filteredLogs, chartPoints]);
 
-  // Export as XLSX — user's own logs, same format as admin export
+  // Export as XLSX — user's own logs, updated for new questionnaire columns
   const handleExport = async () => {
     if (filteredLogs.length === 0) return;
 
     const { generateXlsx } = await import('@/lib/xlsx-export');
     type XlsxColumn = import('@/lib/xlsx-export').XlsxColumn;
 
-    const boolToYesNo = (v: any) => (v === 1 || v === true ? 'Yes' : 'No');
     const formatDate = (d: string) => {
       if (!d) return '';
       const [y, m, day] = d.split('-');
       return `${m}/${day}/${y}`;
     };
+    const s = (v: any) => (v == null ? '' : String(v));
 
     const columns: XlsxColumn[] = [
-      { header: 'Date',               key: 'Date',               width: 12 },
-      { header: 'Screen Time (hrs)',  key: 'Screen Time (hours)', width: 16 },
-      { header: 'Sleep Hours',        key: 'Sleep Hours',         width: 12 },
-      { header: 'Brightness (%)',     key: 'Brightness (%)',      width: 14 },
-      { header: 'Breaks Taken',       key: 'Breaks Taken',        width: 13 },
-      { header: 'Eye Strain',         key: 'Eye Strain',          width: 11 },
-      { header: 'Headaches',          key: 'Headaches',           width: 11 },
-      { header: 'Dry Eyes',           key: 'Dry Eyes',            width: 10 },
-      { header: 'Blurry Vision',      key: 'Blurry Vision',       width: 13 },
-      { header: 'Risk Level',         key: 'Risk Level',          width: 12 },
+      { header: 'Date',                        key: 'Date',                   width: 12 },
+      { header: 'Academic Screen Time',        key: 'Academic Screen Time',   width: 22 },
+      { header: 'Non-Academic Screen Time',    key: 'Non-Academic Screen Time', width: 24 },
+      { header: 'Primary Device',             key: 'Primary Device',         width: 16 },
+      { header: '20-20-20 Rule',              key: '20-20-20',               width: 14 },
+      { header: 'Blue Light Filter',          key: 'Blue Light Filter',      width: 16 },
+      { header: 'Screen Brightness',          key: 'Screen Brightness',      width: 16 },
+      { header: 'Dark Room Use',              key: 'Dark Room Use',          width: 14 },
+      { header: 'Screen Distance',            key: 'Screen Distance',        width: 16 },
+      { header: 'Break Frequency',            key: 'Break Frequency',        width: 20 },
+      { header: 'Sleep Hours',               key: 'Sleep Hours',            width: 12 },
+      { header: 'Sym: Blurred Vision',        key: 'Blurred Vision',         width: 16 },
+      { header: 'Sym: Dry Eyes',             key: 'Dry Eyes',               width: 12 },
+      { header: 'Sym: Eye Irritation',        key: 'Eye Irritation',         width: 16 },
+      { header: 'Sym: Headaches',            key: 'Headaches',              width: 12 },
+      { header: 'Sym: Mental Fatigue',        key: 'Mental Fatigue',         width: 16 },
+      { header: 'Sym: Light Sensitivity',     key: 'Light Sensitivity',      width: 18 },
+      { header: 'Sym: Difficulty Focusing',   key: 'Difficulty Focusing',    width: 18 },
+      { header: 'Sym: Neck/Shoulder Pain',    key: 'Neck Shoulder Pain',     width: 18 },
+      { header: 'Overall Eye Strain',         key: 'Overall Eye Strain',     width: 16 },
+      { header: 'Digital Fatigue Frequency',  key: 'Digital Fatigue',        width: 20 },
+      { header: 'CVS-Q Frequency',            key: 'CVSQ Frequency',         width: 16 },
+      { header: 'CVS-Q Screen Associated',    key: 'CVSQ Screen',            width: 18 },
+      { header: 'EyeGuard Risk Level',        key: 'Risk Level',             width: 16 },
     ];
 
     const rows = filteredLogs.map((l: any) => ({
-      'Date':               formatDate(l.date),
-      'Screen Time (hours)': l.screen_time ?? '',
-      'Sleep Hours':         l.sleep_hours ?? '',
-      'Brightness (%)':      l.brightness  ?? '',
-      'Breaks Taken':        l.breaks_taken ?? 0,
-      'Eye Strain':          boolToYesNo(l.eye_strain),
-      'Headaches':           boolToYesNo(l.headaches),
-      'Dry Eyes':            boolToYesNo(l.dry_eyes),
-      'Blurry Vision':       boolToYesNo(l.blurry_vision),
-      'Risk Level':          l.risk_level ?? '',
+      'Date':                    formatDate(l.date),
+      'Academic Screen Time':    s(l.academic_screen_time),
+      'Non-Academic Screen Time': s(l.non_academic_screen_time),
+      'Primary Device':          s(l.primary_device),
+      '20-20-20':                s(l.follows_20_20_20),
+      'Blue Light Filter':       s(l.blue_light_filter),
+      'Screen Brightness':       s(l.screen_brightness),
+      'Dark Room Use':           s(l.dark_room_use),
+      'Screen Distance':         s(l.screen_distance),
+      'Break Frequency':         s(l.break_frequency),
+      'Sleep Hours':             l.sleep_hours ?? '',
+      'Blurred Vision':          s(l.sym_blurred_vision),
+      'Dry Eyes':                s(l.sym_dry_eyes),
+      'Eye Irritation':          s(l.sym_eye_irritation),
+      'Headaches':               s(l.sym_headaches),
+      'Mental Fatigue':          s(l.sym_mental_fatigue),
+      'Light Sensitivity':       s(l.sym_light_sensitivity),
+      'Difficulty Focusing':     s(l.sym_difficulty_focusing),
+      'Neck Shoulder Pain':      s(l.sym_neck_shoulder_pain),
+      'Overall Eye Strain':      s(l.overall_eye_strain),
+      'Digital Fatigue':         s(l.digital_fatigue_frequency),
+      'CVSQ Frequency':          s(l.cvsq_frequency),
+      'CVSQ Screen':             s(l.cvsq_screen_associated),
+      'Risk Level':              s(l.risk_level),
     }));
 
     const xlsx = generateXlsx(rows, columns, 'My Eye Health Data');

@@ -13,9 +13,13 @@ import {
 
 interface StatsData {
   totalRespondents: number
+  dailyRespondents?: number
+  surveyRespondents?: number
   riskDistribution: { Low: number; Moderate: number; High: number; Critical: number }
   averageScreenTime: number
   topSymptoms: Array<{ symptom: string; count: number }>
+  cvsqDistribution?: Record<string, number>
+  avgCvsqScore?: number | null
 }
 
 interface UserRecord {
@@ -362,7 +366,15 @@ export default function AdminAnalyticsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="border border-[#f97316]/10 bg-[#f97316]/[0.03] rounded-xl p-5 flex items-center gap-4">
           <div className="w-10 h-10 rounded-lg bg-[#f97316]/15 flex items-center justify-center flex-shrink-0"><BarChart3 className="w-5 h-5 text-[#f97316]" /></div>
-          <div><p className="text-xs text-muted-foreground">Total Respondents</p><p className="text-2xl font-bold text-foreground">{stats.totalRespondents}</p></div>
+          <div>
+            <p className="text-xs text-muted-foreground">Total Respondents</p>
+            <p className="text-2xl font-bold text-foreground">{stats.totalRespondents}</p>
+            {(stats.dailyRespondents != null || stats.surveyRespondents != null) && (
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {stats.dailyRespondents ?? 0} live · {stats.surveyRespondents ?? 0} imported
+              </p>
+            )}
+          </div>
         </div>
         <div className="border border-[#f97316]/10 bg-[#f97316]/[0.03] rounded-xl p-5 flex items-center gap-4">
           <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0"><TrendingUp className="w-5 h-5 text-primary" /></div>
@@ -370,7 +382,13 @@ export default function AdminAnalyticsPage() {
         </div>
         <div className="border border-[#f97316]/10 bg-[#f97316]/[0.03] rounded-xl p-5 flex items-center gap-4">
           <div className="w-10 h-10 rounded-lg bg-[#f97316]/15 flex items-center justify-center flex-shrink-0"><Eye className="w-5 h-5 text-[#f97316]" /></div>
-          <div><p className="text-xs text-muted-foreground">Top Symptom</p><p className="text-2xl font-bold text-foreground capitalize">{stats.topSymptoms[0] ? (symptomLabels[stats.topSymptoms[0].symptom] ?? stats.topSymptoms[0].symptom) : '—'}</p></div>
+          <div>
+            <p className="text-xs text-muted-foreground">Top Symptom</p>
+            <p className="text-2xl font-bold text-foreground capitalize">{stats.topSymptoms[0] ? (symptomLabels[stats.topSymptoms[0].symptom] ?? stats.topSymptoms[0].symptom) : '—'}</p>
+            {stats.avgCvsqScore != null && (
+              <p className="text-[10px] text-muted-foreground mt-0.5">Avg CVS-Smart: {stats.avgCvsqScore}/10</p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -393,6 +411,58 @@ export default function AdminAnalyticsPage() {
           })}
         </div>
       </div>
+
+      {/* ── CVS-Smart Distribution (from imported survey_responses) ── */}
+      {stats.cvsqDistribution && Object.values(stats.cvsqDistribution).some(v => v > 0) && (() => {
+        const cvsqOrder = ['Positive CVS Case', 'High Probability', 'Low Probability', 'Not a CVS Case', 'Normal']
+        const cvsqColors: Record<string, string> = {
+          'Positive CVS Case': 'bg-red-500',
+          'High Probability':  'bg-orange-500',
+          'Low Probability':   'bg-yellow-500',
+          'Not a CVS Case':    'bg-green-500',
+          'Normal':            'bg-green-400',
+        }
+        const cvsqTextColors: Record<string, string> = {
+          'Positive CVS Case': 'text-red-500',
+          'High Probability':  'text-orange-500',
+          'Low Probability':   'text-yellow-500',
+          'Not a CVS Case':    'text-green-500',
+          'Normal':            'text-green-400',
+        }
+        const total = Object.values(stats.cvsqDistribution!).reduce((a, b) => a + b, 0) || 1
+        const maxCount = Math.max(...Object.values(stats.cvsqDistribution!))
+        return (
+          <div className="border border-[#f97316]/10 bg-[#f97316]/[0.03] rounded-xl p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-sm font-semibold text-foreground">CVS-Smart Score Distribution</h2>
+              {stats.avgCvsqScore != null && (
+                <span className="text-xs text-muted-foreground px-3 py-1 rounded-full bg-muted/40 border border-border">
+                  Avg score: <strong className="text-foreground">{stats.avgCvsqScore}/10</strong>
+                </span>
+              )}
+            </div>
+            <div className="space-y-4">
+              {cvsqOrder.map(status => {
+                const count = stats.cvsqDistribution![status] ?? 0
+                const pct   = Math.round((count / total) * 1000) / 10
+                const barW  = maxCount > 0 ? (count / maxCount) * 100 : 0
+                return (
+                  <div key={status} className="flex items-center gap-4">
+                    <span className={`w-36 text-sm font-medium text-right flex-shrink-0 ${cvsqTextColors[status]}`}>{status}</span>
+                    <div className="flex-1 bg-[#f97316]/8 rounded-full h-3 overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-500 ${cvsqColors[status]}`} style={{ width: `${barW}%` }} />
+                    </div>
+                    <span className="w-20 text-sm text-muted-foreground text-right flex-shrink-0">{count} ({pct}%)</span>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground mt-4">
+              Based on {stats.surveyRespondents ?? total} imported survey respondents. Score ≥7 = Positive CVS, 5–6 = High Probability, 3–4 = Low Probability, 1–2 = Not a CVS Case, 0 = Normal.
+            </p>
+          </div>
+        )
+      })()}
 
       {/* ── Symptom frequency ── */}
       <div className="border border-[#f97316]/10 bg-[#f97316]/[0.03] rounded-xl p-6">

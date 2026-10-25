@@ -5,15 +5,36 @@ import { NextResponse } from 'next/server'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function freqToScore(freq: string | null | undefined): number {
+/** Maps the new Never/Rarely/Sometimes/Often/Always scale to 0–4. */
+function symToScore(freq: string | null | undefined): number {
   const map: Record<string, number> = {
-    'Never': 0,
-    'Rarely (1-2 times a week)': 1,
-    'Sometimes (3-4 times a week)': 2,
-    'Often (5-6 times a week)': 3,
-    'Always (every day)': 4,
+    'Never': 0, 'Rarely': 1, 'Sometimes': 2, 'Often': 3, 'Always': 4,
   }
   return map[freq ?? ''] ?? 0
+}
+
+/** Maps break_frequency string to a numeric score (higher = more breaks taken = better). */
+function breakFreqToScore(freq: string | null | undefined): number {
+  const map: Record<string, number> = {
+    'Every 20 minutes':    4,
+    'Every 30–60 minutes': 3,
+    'Every 1–2 hours':     2,
+    'Rarely take breaks':  0,
+  }
+  return map[freq ?? ''] ?? 1
+}
+
+/** Maps categorical screen time strings to numeric hours. */
+function acadToHours(s: string | null | undefined): number {
+  return ({ 'Less than 2 hours': 1, '2–4 hours': 3, '4–6 hours': 5, '6–8 hours': 7, 'More than 8 hours': 9 } as Record<string, number>)[s ?? ''] ?? 0
+}
+function nonAcadToHours(s: string | null | undefined): number {
+  return ({ 'Less than 1 hour': 0.5, '1–3 hours': 2, '3–5 hours': 4, '5–7 hours': 6, 'More than 7 hours': 8 } as Record<string, number>)[s ?? ''] ?? 0
+}
+
+/** Maps sleep hours string to numeric. */
+function sleepToHours(s: string | null | undefined): number {
+  return ({ 'Less than 5 hours': 4.5, '5–6 hours': 5.5, '7–8 hours': 7.5, 'More than 8 hours': 8.5 } as Record<string, number>)[s ?? ''] ?? (Number(s) || 0)
 }
 
 function avg(arr: number[]): number {
@@ -25,28 +46,15 @@ function delta(before: number, after: number): number {
   return parseFloat((after - before).toFixed(2))
 }
 
-// Direction: positive change means improvement for this metric?
-// screen_time ↓ = good, sleep ↑ = good, symptoms ↓ = good, risk ↓ = good
 function improvementStatus(
-  screenDelta: number,
-  sleepDelta: number,
-  symptomDelta: number,
-  riskDelta: number,
+  screenDelta: number, sleepDelta: number,
+  symptomDelta: number, riskDelta: number,
 ): 'Improved' | 'No Change' | 'Worsened' {
-  // Score: +1 if metric moved in healthy direction, -1 if not, 0 if negligible
   let score = 0
-  if (screenDelta < -0.3) score += 1   // screen time decreased
-  else if (screenDelta > 0.5) score -= 1
-
-  if (sleepDelta > 0.2) score += 1     // sleep increased
-  else if (sleepDelta < -0.3) score -= 1
-
-  if (symptomDelta < -0.1) score += 1  // symptoms decreased
-  else if (symptomDelta > 0.1) score -= 1
-
-  if (riskDelta < -3) score += 1       // risk score dropped
-  else if (riskDelta > 3) score -= 1
-
+  if (screenDelta  < -0.3) score += 1; else if (screenDelta  > 0.5)  score -= 1
+  if (sleepDelta   > 0.2)  score += 1; else if (sleepDelta   < -0.3) score -= 1
+  if (symptomDelta < -0.1) score += 1; else if (symptomDelta > 0.1)  score -= 1
+  if (riskDelta    < -3)   score += 1; else if (riskDelta    > 3)    score -= 1
   if (score >= 2) return 'Improved'
   if (score <= -2) return 'Worsened'
   return 'No Change'
@@ -68,25 +76,24 @@ export async function GET() {
     return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
   }
 
-  // Fetch all registered-user logs (user_id not null) with predictions joined via log id
+  // Fetch all registered-user logs with new questionnaire columns
   const { data: logs, error: logsError } = await adminClient
     .from('daily_logs')
     .select(`
-      id,
-      user_id,
-      email,
-      date,
-      screen_time,
+      id, user_id, email, date,
+      academic_screen_time, non_academic_screen_time, screen_time,
       sleep_hours,
-      breaks_taken,
-      eye_strain,
-      eye_strain_frequency,
-      headaches,
-      headaches_frequency,
-      blurry_vision,
-      blurry_vision_frequency,
-      dry_eyes,
-      dry_eyes_frequency,
+      break_frequency,
+      sym_eye_irritation,
+      sym_headaches,
+      sym_blurred_vision,
+      sym_dry_eyes,
+      sym_mental_fatigue,
+      sym_neck_shoulder_pain,
+      sym_difficulty_focusing,
+      sym_light_sensitivity,
+      sym_eye_itchiness,
+      overall_eye_strain,
       risk_level
     `)
     .not('user_id', 'is', null)
@@ -96,9 +103,9 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to fetch logs' }, { status: 500 })
   }
 
-  // Fetch latest prediction per log to get risk_percentage
+  // Fetch risk_percentage from predictions for each log
   const logIds = (logs ?? []).map((l: any) => l.id)
-  let predMap: Record<string, number> = {}
+  const predMap: Record<string, number> = {}
   if (logIds.length > 0) {
     const { data: preds } = await adminClient
       .from('predictions')
@@ -109,7 +116,7 @@ export async function GET() {
     }
   }
 
-  // Fetch user profiles for display names
+  // Fetch user profiles
   const userIds = [...new Set((logs ?? []).map((l: any) => l.user_id))]
   const { data: profiles } = await adminClient
     .from('user_profiles')
@@ -123,76 +130,81 @@ export async function GET() {
   // Group logs by user
   const byUser = new Map<string, any[]>()
   for (const log of logs ?? []) {
-    const uid = log.user_id
-    if (!byUser.has(uid)) byUser.set(uid, [])
-    byUser.get(uid)!.push(log)
+    if (!byUser.has(log.user_id)) byUser.set(log.user_id, [])
+    byUser.get(log.user_id)!.push(log)
   }
 
   const results: any[] = []
 
   for (const [userId, userLogs] of byUser) {
-    // Need at least 2 logs to compare
     if (userLogs.length < 2) continue
 
-    // Split: "before" = all logs except last 7, "recent" = last 7
-    // If fewer than 7 logs total, use first half vs second half
-    let beforeLogs: any[]
-    let recentLogs: any[]
-
+    let beforeLogs: any[], recentLogs: any[]
     if (userLogs.length >= 14) {
-      recentLogs = userLogs.slice(-7)
-      beforeLogs = userLogs.slice(-14, -7)
+      recentLogs = userLogs.slice(-7); beforeLogs = userLogs.slice(-14, -7)
     } else if (userLogs.length >= 4) {
       const split = Math.floor(userLogs.length / 2)
-      beforeLogs = userLogs.slice(0, split)
-      recentLogs = userLogs.slice(split)
+      beforeLogs = userLogs.slice(0, split); recentLogs = userLogs.slice(split)
     } else {
-      // 2–3 logs: use first as baseline, rest as recent
-      beforeLogs = [userLogs[0]]
-      recentLogs = userLogs.slice(1)
+      beforeLogs = [userLogs[0]]; recentLogs = userLogs.slice(1)
     }
 
-    // ── Metric averages ─────────────────────────────────────────────────────
+    // ── Screen time ──────────────────────────────────────────────────────────
+    // Use pre-computed screen_time if available, otherwise sum categorical
+    const toScreenHours = (l: any) =>
+      l.screen_time != null
+        ? Number(l.screen_time) || 0
+        : acadToHours(l.academic_screen_time) + nonAcadToHours(l.non_academic_screen_time)
 
-    const beforeScreen  = avg(beforeLogs.map(l => Number(l.screen_time)  || 0))
-    const recentScreen  = avg(recentLogs.map(l => Number(l.screen_time)  || 0))
+    const beforeScreen = avg(beforeLogs.map(toScreenHours))
+    const recentScreen = avg(recentLogs.map(toScreenHours))
 
-    const beforeSleep   = avg(beforeLogs.map(l => Number(l.sleep_hours)  || 0))
-    const recentSleep   = avg(recentLogs.map(l => Number(l.sleep_hours)  || 0))
+    // ── Sleep ────────────────────────────────────────────────────────────────
+    const toSleep = (l: any) =>
+      typeof l.sleep_hours === 'number' ? l.sleep_hours : sleepToHours(l.sleep_hours)
 
-    const beforeBreaks  = avg(beforeLogs.map(l => Number(l.breaks_taken) || 0))
-    const recentBreaks  = avg(recentLogs.map(l => Number(l.breaks_taken) || 0))
+    const beforeSleep = avg(beforeLogs.map(toSleep))
+    const recentSleep = avg(recentLogs.map(toSleep))
 
-    // Symptom burden: weighted average (0–4 scale per symptom, eye strain & blurry vision weight 2)
+    // ── Breaks ───────────────────────────────────────────────────────────────
+    const beforeBreaks = avg(beforeLogs.map((l: any) => breakFreqToScore(l.break_frequency)))
+    const recentBreaks = avg(recentLogs.map((l: any) => breakFreqToScore(l.break_frequency)))
+
+    // ── Symptom burden (0–1 scale, weighted) ─────────────────────────────────
+    // Weights: blurred vision & eye irritation (primary) × 2, others × 1; max raw = 2+2+1+1+1+1+1+1+1 = 12
     const symptomBurden = (ls: any[]) =>
-      avg(ls.map(l =>
-        ((freqToScore(l.eye_strain_frequency)    * 2) +
-         (freqToScore(l.blurry_vision_frequency) * 2) +
-         (freqToScore(l.headaches_frequency)     * 1) +
-         (freqToScore(l.dry_eyes_frequency)      * 1)) / 8
-      ))
+      avg(ls.map(l => (
+        (symToScore(l.sym_blurred_vision)       * 2) +
+        (symToScore(l.sym_eye_irritation)        * 2) +
+        (symToScore(l.sym_headaches)             * 1) +
+        (symToScore(l.sym_dry_eyes)              * 1) +
+        (symToScore(l.sym_mental_fatigue)        * 1) +
+        (symToScore(l.sym_neck_shoulder_pain)    * 1) +
+        (symToScore(l.sym_difficulty_focusing)   * 1) +
+        (symToScore(l.sym_light_sensitivity)     * 1) +
+        (symToScore(l.sym_eye_itchiness)         * 1)
+      ) / 20)) // normalise to 0–1 (20 = all Always)
+
     const beforeSymptom = symptomBurden(beforeLogs)
     const recentSymptom = symptomBurden(recentLogs)
 
-    // Per-symptom frequency averages (0–4 scale)
-    const beforeEyeStrain    = avg(beforeLogs.map(l => freqToScore(l.eye_strain_frequency)))
-    const recentEyeStrain    = avg(recentLogs.map(l => freqToScore(l.eye_strain_frequency)))
-    const beforeHeadaches    = avg(beforeLogs.map(l => freqToScore(l.headaches_frequency)))
-    const recentHeadaches    = avg(recentLogs.map(l => freqToScore(l.headaches_frequency)))
-    const beforeBlurry       = avg(beforeLogs.map(l => freqToScore(l.blurry_vision_frequency)))
-    const recentBlurry       = avg(recentLogs.map(l => freqToScore(l.blurry_vision_frequency)))
-    const beforeDryEyes      = avg(beforeLogs.map(l => freqToScore(l.dry_eyes_frequency)))
-    const recentDryEyes      = avg(recentLogs.map(l => freqToScore(l.dry_eyes_frequency)))
+    // ── Per-symptom averages ──────────────────────────────────────────────────
+    const beforeEyeStrain  = avg(beforeLogs.map((l: any) => symToScore(l.sym_eye_irritation)))
+    const recentEyeStrain  = avg(recentLogs.map((l: any) => symToScore(l.sym_eye_irritation)))
+    const beforeHeadaches  = avg(beforeLogs.map((l: any) => symToScore(l.sym_headaches)))
+    const recentHeadaches  = avg(recentLogs.map((l: any) => symToScore(l.sym_headaches)))
+    const beforeBlurry     = avg(beforeLogs.map((l: any) => symToScore(l.sym_blurred_vision)))
+    const recentBlurry     = avg(recentLogs.map((l: any) => symToScore(l.sym_blurred_vision)))
+    const beforeDryEyes    = avg(beforeLogs.map((l: any) => symToScore(l.sym_dry_eyes)))
+    const recentDryEyes    = avg(recentLogs.map((l: any) => symToScore(l.sym_dry_eyes)))
 
-    // Risk percentage from predictions
-    const beforeRisk = avg(beforeLogs.map(l => predMap[l.id] ?? 0))
-    const recentRisk = avg(recentLogs.map(l => predMap[l.id] ?? 0))
+    // ── Risk percentage from predictions ──────────────────────────────────────
+    const beforeRisk = avg(beforeLogs.map((l: any) => predMap[l.id] ?? 0))
+    const recentRisk = avg(recentLogs.map((l: any) => predMap[l.id] ?? 0))
 
-    // Most recent risk level label
     const latestLog = userLogs[userLogs.length - 1]
     const latestRiskLevel = latestLog.risk_level ?? 'Unknown'
 
-    // Deltas
     const screenDelta  = delta(beforeScreen,  recentScreen)
     const sleepDelta   = delta(beforeSleep,   recentSleep)
     const breaksDelta  = delta(beforeBreaks,  recentBreaks)
@@ -202,21 +214,19 @@ export async function GET() {
     const status = improvementStatus(screenDelta, sleepDelta, symptomDelta, riskDelta)
 
     const profile = profileMap[userId]
-    const displayName = profile?.firstName || profile?.lastName
+    const displayName = (profile?.firstName || profile?.lastName)
       ? `${profile.firstName} ${profile.lastName}`.trim()
       : null
 
     results.push({
       userId,
-      email: latestLog.email ?? '',
+      email:         latestLog.email ?? '',
       displayName,
-      totalLogs: userLogs.length,
-      firstLogDate: userLogs[0].date,
+      totalLogs:     userLogs.length,
+      firstLogDate:  userLogs[0].date,
       latestLogDate: latestLog.date,
       latestRiskLevel,
       status,
-
-      // Before/after summaries
       before: {
         avgScreenTime:  parseFloat(beforeScreen.toFixed(1)),
         avgSleepHours:  parseFloat(beforeSleep.toFixed(1)),
@@ -255,34 +265,25 @@ export async function GET() {
     })
   }
 
-  // Sort: Worsened first (needs attention), then No Change, then Improved
   const order = { Worsened: 0, 'No Change': 1, Improved: 2 }
   results.sort((a, b) => order[a.status as keyof typeof order] - order[b.status as keyof typeof order])
 
-  // Summary counts
   const improved  = results.filter(r => r.status === 'Improved').length
   const worsened  = results.filter(r => r.status === 'Worsened').length
   const noChange  = results.filter(r => r.status === 'No Change').length
-
-  // Population-level averages
-  const avgRiskDelta    = results.length ? avg(results.map(r => r.deltas.riskPercentage)) : 0
-  const avgScreenDelta  = results.length ? avg(results.map(r => r.deltas.screenTime))     : 0
-  const avgSleepDelta   = results.length ? avg(results.map(r => r.deltas.sleepHours))     : 0
-  const avgSymptomDelta = results.length ? avg(results.map(r => r.deltas.symptomBurden))  : 0
+  const n         = results.length
 
   return NextResponse.json({
     users: results,
     summary: {
-      total: results.length,
-      improved,
-      worsened,
-      noChange,
-      improvedPct: results.length ? parseFloat(((improved / results.length) * 100).toFixed(1)) : 0,
-      worsenedPct: results.length ? parseFloat(((worsened / results.length) * 100).toFixed(1)) : 0,
-      avgRiskDelta:    parseFloat(avgRiskDelta.toFixed(1)),
-      avgScreenDelta:  parseFloat(avgScreenDelta.toFixed(1)),
-      avgSleepDelta:   parseFloat(avgSleepDelta.toFixed(1)),
-      avgSymptomDelta: parseFloat(avgSymptomDelta.toFixed(1)),
+      total:       n,
+      improved, worsened, noChange,
+      improvedPct: n ? parseFloat(((improved / n) * 100).toFixed(1)) : 0,
+      worsenedPct: n ? parseFloat(((worsened / n) * 100).toFixed(1)) : 0,
+      avgRiskDelta:    parseFloat((n ? avg(results.map(r => r.deltas.riskPercentage)) : 0).toFixed(1)),
+      avgScreenDelta:  parseFloat((n ? avg(results.map(r => r.deltas.screenTime))     : 0).toFixed(1)),
+      avgSleepDelta:   parseFloat((n ? avg(results.map(r => r.deltas.sleepHours))     : 0).toFixed(1)),
+      avgSymptomDelta: parseFloat((n ? avg(results.map(r => r.deltas.symptomBurden))  : 0).toFixed(1)),
     },
   })
 }

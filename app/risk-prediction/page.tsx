@@ -257,11 +257,20 @@ export default function RiskPredictionPage() {
   const barColor = (s: 'good' | 'warn' | 'bad') =>
     s === 'good' ? 'bg-green-500' : s === 'warn' ? 'bg-yellow-500' : 'bg-red-500';
 
-  // Recommendations
+  // Recommendations — parse, deduplicate by title, then filter/inject breaks
   const rawRecs = prediction.recommendations || [];
   const recs = rawRecs.map((r: unknown) => {
     if (typeof r === 'string') { try { const p = JSON.parse(r); if (p?.title) return p; } catch {} return { title: r, description: '' }; }
     return r as { title: string; description: string; category?: string };
+  });
+
+  // Title-level dedup — prevents duplicates stored before the fix was applied
+  const _seenTitles = new Set<string>();
+  const dedupedRecs = recs.filter((r: any) => {
+    const t = r.title ?? '';
+    if (_seenTitles.has(t)) return false;
+    _seenTitles.add(t);
+    return true;
   });
 
   const injectingBreaks = breaksTaken !== null && breaksTaken < 3;
@@ -270,12 +279,12 @@ export default function RiskPredictionPage() {
   // (e.g. "20-20-20 Rule", "Take regular eye breaks", "Eye breaks" category)
   const EYE_BREAK_PATTERNS = /20.20.20|eye break|regular break/i;
   const filteredRecs = injectingBreaks
-    ? recs.filter((r: any) => {
+    ? dedupedRecs.filter((r: any) => {
         const title = r.title ?? '';
         const cat   = r.category ?? '';
         return !EYE_BREAK_PATTERNS.test(title) && !EYE_BREAK_PATTERNS.test(cat);
       })
-    : recs;
+    : dedupedRecs;
 
   if (injectingBreaks) {
     filteredRecs.unshift({
@@ -286,7 +295,7 @@ export default function RiskPredictionPage() {
       category: 'eye breaks',
     });
   }
-  const visibleRecs = filteredRecs.slice(0, 4);
+  const visibleRecs = filteredRecs.slice(0, 6);
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -328,39 +337,6 @@ export default function RiskPredictionPage() {
                   <ArrowRight className="w-4 h-4" />
                   Update Log
                 </button>
-              </div>
-
-              {/* Hero gauge card */}
-              <div className={`rounded-2xl border-2 p-5 sm:p-6 ${meta.card}`}>
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground mb-4">EyeGuard Behavioral Score</p>
-                <div className="flex items-center gap-4 mb-5 flex-wrap">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className={`text-5xl sm:text-6xl font-bold tabular-nums leading-none ${meta.text}`}>
-                      {riskPct.toFixed(1)}
-                    </span>
-                    <span className="text-2xl font-semibold text-muted-foreground">%</span>
-                  </div>
-                  <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-base font-bold ${meta.badge}`}>
-                    {riskLvl === 0 && <CheckCircle2 className="w-5 h-5" />}
-                    {riskLvl === 1 && <Activity className="w-5 h-5" />}
-                    {riskLvl >= 2 && <AlertTriangle className="w-5 h-5" />}
-                    {meta.label}
-                  </div>
-                </div>
-                <div className="space-y-2 mb-4">
-                  <div className="h-3 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
-                    <div className={`h-full rounded-full transition-all duration-700 ${meta.bg}`} style={{ width: `${riskPct}%` }} />
-                  </div>
-                  <div className="flex justify-between text-[11px] text-muted-foreground px-0.5">
-                    <span>0</span><span>25 Moderate</span><span>50 High</span><span>75 Critical</span><span>100</span>
-                  </div>
-                </div>
-                <p className={`text-sm font-semibold ${meta.text}`}>
-                  {riskLvl === 3 ? '⚠ Critical: rest your eyes immediately and seek professional advice if symptoms persist.' :
-                   riskLvl === 2 ? 'High: reduce screen exposure and follow the recommendations below.' :
-                   riskLvl === 1 ? 'Moderate: small daily habit changes can lower your risk.' :
-                   '✓ Great! Your risk is low. Keep up your current habits!'}
-                </p>
               </div>
 
               {/* ── CVS-Smart + EyeGuard score cards ──────────────────────── */}
@@ -587,59 +563,6 @@ export default function RiskPredictionPage() {
                   </div>
                 );
               })()}
-
-              {/* Contributing factors */}
-              <div>
-                <div className="mb-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#f97316]">The signal behind the score</p>
-                  <h2 className="text-2xl font-bold text-foreground mt-1">What's Affecting Your Score</h2>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <FactorBar icon={<Activity className="w-4 h-4" />} label="Symptoms"
-                    displayValue={`${symptomBarPct.toFixed(0)}%`} barPct={symptomBarPct}
-                    barColor={barColor(symptomStatus)} status={symptomStatus} message={symptomMsg} />
-                  <FactorBar icon={<Monitor className="w-4 h-4" />} label="Screen Time"
-                    displayValue={`${screenTime}h today`} barPct={screenBarPct}
-                    barColor={barColor(screenStatus)} status={screenStatus} message={screenMsg} />
-                  <FactorBar icon={<Moon className="w-4 h-4" />} label="Sleep"
-                    displayValue={`${sleepHours}h last night`} barPct={sleepBarPct}
-                    barColor={barColor(sleepStatus)} status={sleepStatus} message={sleepMsg} />
-                  <FactorBar icon={<Sun className="w-4 h-4" />} label="Screen Brightness"
-                    displayValue={`${brightness}% brightness`} barPct={brightBarPct}
-                    barColor={barColor(brightStatus)} status={brightStatus} message={brightMsg} />
-                </div>
-              </div>
-
-              {/* Methodology accordion */}
-              <div className="rounded-2xl border border-[#f97316]/25 bg-[#f97316]/[0.04] dark:bg-[#f97316]/[0.06] overflow-hidden">
-                <button
-                  onClick={() => setMethodOpen(v => !v)}
-                  className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left hover:bg-[#f97316]/[0.06] transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-[#f97316]/15 flex items-center justify-center flex-shrink-0">
-                      <Info className="w-4 h-4 text-[#f97316]" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">How Your Risk Score Is Calculated</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Clinical research and published eye health guidelines</p>
-                    </div>
-                  </div>
-                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#f97316]/30 bg-[#f97316]/10 text-[#f97316] text-xs font-semibold flex-shrink-0 ${methodOpen ? 'opacity-70' : ''}`}>
-                    {methodOpen ? 'Collapse' : 'See details'}
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${methodOpen ? 'rotate-180' : ''}`} />
-                  </div>
-                </button>
-                {methodOpen && (
-                  <div className="px-5 pb-5 pt-1 grid gap-4 text-sm leading-relaxed text-muted-foreground sm:grid-cols-2 border-t border-[#f97316]/15">
-                    <div><h3 className="font-semibold text-[#f97316] mb-1">Why the score increases</h3><p>Reported symptoms are the primary driver. Additional points come from excessive screen time, insufficient sleep, brightness outside the 40–80% optimal range, and missing eye breaks.</p></div>
-                    <div><h3 className="font-semibold text-[#f97316] mb-1">Why the score decreases</h3><p>Lower symptom frequency, moderate screen exposure, 7–9 hours of sleep, suitable brightness, eye breaks, outdoor time, regular exercise, and blue-light-filter use all reduce the score.</p></div>
-                    <div><h3 className="font-semibold text-[#f97316] mb-1">Calculation method</h3><p>Symptoms are weighted based on clinical research: eye strain and blurry vision count twice as they are the primary indicators of digital eye strain; headaches and dry eyes count once. Environmental modifiers are then added or subtracted. The final score is capped at 0–100.</p></div>
-                    <div><h3 className="font-semibold text-[#f97316] mb-1">Clinical disclaimer</h3><p>This is a digital eye strain screening estimate, not a medical diagnosis. Consult a qualified eye-care professional about persistent symptoms.</p></div>
-                    <div className="sm:col-span-2 border-t border-[#f97316]/15 pt-4"><h3 className="font-semibold text-[#f97316] mb-1">Research basis</h3><p>Symptom weighting is grounded in published clinical research on digital eye strain. Environmental thresholds draw on guidance from the American Optometric Association, National Sleep Foundation, ISO 9241-303, and peer-reviewed eye health literature.</p></div>
-                  </div>
-                )}
-              </div>
 
               {/* Recommendations */}
               {recs.length > 0 && (

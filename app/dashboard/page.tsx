@@ -270,30 +270,42 @@ export default function DashboardPage() {
                     <h3 className="text-sm font-semibold text-foreground">Your next best action</h3>
                   </div>
                   <ul className="space-y-3">
-                    {prediction.recommendations.slice(0, 3).map((rawRec: unknown, idx: number) => {
-                      let rec = rawRec;
-                      if (typeof rawRec === 'string') {
-                        try { const p = JSON.parse(rawRec); if (p?.title) rec = p; } catch { /* plain */ }
-                      }
-                      if (typeof rec === 'string') return (
-                        <li key={idx} className="flex items-start gap-3">
-                          <span className="mt-2 w-1.5 h-1.5 rounded-full bg-[#f97316]/60 flex-shrink-0" />
-                          <span className="text-sm text-foreground">{rec}</span>
-                        </li>
-                      );
-                      const r = rec as { title: string; description?: string };
-                      return (
-                        <li key={idx} className="flex items-start gap-3 py-1">
-                          <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[#f97316] flex-shrink-0" />
-                          <div>
-                            <p className="text-sm font-semibold text-foreground">{r.title}</p>
-                            {r.description && (
-                              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{r.description}</p>
-                            )}
-                          </div>
-                        </li>
-                      );
-                    })}
+                    {(() => {
+                      // Dedup by title before slicing
+                      const seen = new Set<string>()
+                      const uniqueRecs = prediction.recommendations.filter((r: unknown) => {
+                        let title = ''
+                        if (typeof r === 'string') { try { const p = JSON.parse(r); title = p?.title ?? r } catch { title = r } }
+                        else title = (r as any)?.title ?? ''
+                        if (seen.has(title)) return false
+                        seen.add(title)
+                        return true
+                      })
+                      return uniqueRecs.slice(0, 3).map((rawRec: unknown, idx: number) => {
+                        let rec = rawRec;
+                        if (typeof rawRec === 'string') {
+                          try { const p = JSON.parse(rawRec); if (p?.title) rec = p; } catch { /* plain */ }
+                        }
+                        if (typeof rec === 'string') return (
+                          <li key={idx} className="flex items-start gap-3">
+                            <span className="mt-2 w-1.5 h-1.5 rounded-full bg-[#f97316]/60 flex-shrink-0" />
+                            <span className="text-sm text-foreground">{rec}</span>
+                          </li>
+                        );
+                        const r = rec as { title: string; description?: string };
+                        return (
+                          <li key={idx} className="flex items-start gap-3 py-1">
+                            <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[#f97316] flex-shrink-0" />
+                            <div>
+                              <p className="text-sm font-semibold text-foreground">{r.title}</p>
+                              {r.description && (
+                                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{r.description}</p>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      });
+                    })()}
                   </ul>
                   <button
                     onClick={() => router.push('/risk-prediction')}

@@ -4,7 +4,6 @@ import { isAdmin } from '@/lib/admin-guard'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
-  // Auth check
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!isAdmin(user)) {
@@ -19,54 +18,85 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url)
-  const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
+  const page     = Math.max(1, parseInt(searchParams.get('page')     ?? '1',  10))
   const pageSize = Math.max(1, parseInt(searchParams.get('pageSize') ?? '20', 10))
-  const search = searchParams.get('search') ?? ''
+  const search   = searchParams.get('search') ?? ''
 
-  // Fetch all logs to compute per-user aggregates (most recent log per user)
-  let query = adminClient
+  // ── 1. Daily-log respondents (registered + anonymous) ──────────────────────
+  let logsQuery = adminClient
     .from('daily_logs')
     .select('user_id, email, age, gender, year_level, field_of_study, date, risk_level')
     .order('date', { ascending: false })
 
-  if (search) {
-    query = query.ilike('email', `%${search}%`)
-  }
+  if (search) logsQuery = logsQuery.ilike('email', `%${search}%`)
 
-  const { data: logs, error } = await query
+  const { data: logs, error: logsErr } = await logsQuery
+  if (logsErr) return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 })
 
-  if (error) {
-    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 })
-  }
-
-  if (!logs || logs.length === 0) {
-    return NextResponse.json({ users: [], page: 1, totalPages: 0, totalCount: 0 })
-  }
-
-  // Group by user key (user_id or email for null user_id rows)
-  const userMap = new Map<string, typeof logs[0]>()
-  for (const log of logs) {
+  // Group daily-log rows by user key (keep most recent = first, already ordered desc)
+  const userMap = new Map<string, { userId: string|null; email: string; age: any; gender: any; yearLevel: any; fieldOfStudy: any; lastLogDate: string; lastRiskLevel: string; source: string }>()
+  for (const log of logs ?? []) {
     const key = log.user_id ?? `anon:${log.email}`
     if (!userMap.has(key)) {
-      userMap.set(key, log) // first entry is most recent (ordered desc)
+      userMap.set(key, {
+        userId:        log.user_id ?? null,
+        email:         log.email ?? '',
+        age:           log.age ?? null,
+        gender:        log.gender ?? null,
+        yearLevel:     log.year_level ?? null,
+        fieldOfStudy:  log.field_of_study ?? null,
+        lastLogDate:   log.date,
+        lastRiskLevel: log.risk_level ?? '',
+        source:        'daily_log',
+      })
     }
   }
 
-  const allUsers = Array.from(userMap.values()).map((log) => ({
-    userId: log.user_id ?? null,
-    email: log.email ?? '',
-    age: log.age ?? null,
-    gender: log.gender ?? null,
-    yearLevel: log.year_level ?? null,
-    fieldOfStudy: log.field_of_study ?? null,
-    lastLogDate: log.date,
-    lastRiskLevel: log.risk_level ?? '',
-  }))
+  // ── 2. Survey-response respondents ─────────────────────────────────────────
+  let surveyQuery = adminClient
+    .from('survey_responses')
+    .select('email, eg_age, eg_gender, eg_year_level, eg_field_of_study, response_timestamp, eg_overall_eye_strain, cvsq_status')
+    .order('response_timestamp', { ascending: false })
 
+  if (search) surveyQuery = surveyQuery.ilike('email', `%${search}%`)
+
+  const { data: surveys } = await surveyQuery
+
+  // Map overall_eye_strain to a risk level label for display
+  const strainToRisk = (s: string|null) => {
+    if (s === 'Severe') return 'High'
+    if (s === 'Moderate') return 'Moderate'
+    if (s === 'Mild') return 'Low'
+    return 'Low'
+  }
+
+  for (const s of surveys ?? []) {
+    const key = `survey:${s.email}`
+    // Skip if this email already appeared in daily_logs (avoid duplicate)
+    const alreadyInDailyLogs = [...userMap.values()].some(
+      (u) => u.email && u.email.toLowerCase() === (s.email ?? '').toLowerCase()
+    )
+    if (!alreadyInDailyLogs) {
+      userMap.set(key, {
+        userId:        null,
+        email:         s.email ?? '',
+        age:           s.eg_age ?? null,
+        gender:        s.eg_gender ?? null,
+        yearLevel:     s.eg_year_level ?? null,
+        fieldOfStudy:  s.eg_field_of_study ?? null,
+        lastLogDate:   s.response_timestamp ? s.response_timestamp.split('T')[0] : '',
+        lastRiskLevel: strainToRisk(s.eg_overall_eye_strain),
+        source:        'survey',
+      })
+    }
+  }
+
+  // ── 3. Paginate and return ──────────────────────────────────────────────────
+  const allUsers   = Array.from(userMap.values())
   const totalCount = allUsers.length
   const totalPages = Math.ceil(totalCount / pageSize)
-  const start = (page - 1) * pageSize
-  const users = allUsers.slice(start, start + pageSize)
+  const start      = (page - 1) * pageSize
+  const users      = allUsers.slice(start, start + pageSize)
 
   return NextResponse.json({ users, page, totalPages, totalCount })
 }

@@ -43,8 +43,10 @@ export default function AdminDataPage() {
         <div>
           <h2 className="text-lg font-semibold text-foreground">Export Data</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Downloads all <code className="text-xs bg-muted px-1 py-0.5 rounded">daily_logs</code> rows
-            as an Excel (.xlsx) file with 16 columns, bold headers, and auto-sized columns.
+            Downloads <strong className="text-foreground">all respondents</strong> as a single Excel file —
+            the 399 imported survey responses plus any live daily log submissions.
+            Each row has a "Source" column (Survey Import / Live Submission) so you can filter in Excel.
+            Includes all CVS-Q answers, symptom grid, habits, environment, and risk scores.
           </p>
         </div>
 
