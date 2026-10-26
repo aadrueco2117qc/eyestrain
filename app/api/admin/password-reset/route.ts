@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
           email: userId,
         });
 
-        if (error || !data?.properties?.recovery_link) {
+        if (error || !data?.properties?.action_link) {
           console.error('Generate link error:', error);
           return NextResponse.json({ error: 'Failed to generate reset link' }, { status: 500 });
         }

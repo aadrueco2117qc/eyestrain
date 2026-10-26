@@ -92,3 +92,22 @@ export function transformLogsForCSV(
     'Submitted At':            formatTimestamp(log.created_at),
   }))
 }
+
+// ── Legacy serializeToCSV — kept for backward compatibility with tests ─────────
+// The main export path now uses generateXlsx, but unit tests still import this.
+export function serializeToCSV(
+  rows: Record<string, unknown>[],
+  columns: readonly string[],
+): string {
+  const escape = (v: unknown): string => {
+    const s = v == null ? '' : String(v)
+    if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+      return `"${s.replace(/"/g, '""')}"`
+    }
+    return s
+  }
+  const header = columns.join(',')
+  if (rows.length === 0) return header
+  const dataRows = rows.map(row => columns.map(col => escape(row[col])).join(','))
+  return [header, ...dataRows].join('\r\n')
+}
