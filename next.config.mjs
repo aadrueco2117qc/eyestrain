@@ -7,19 +7,16 @@ const nextConfig = {
     unoptimized: true,
   },
 
-  // read-excel-file uses unzipper which optionally imports @aws-sdk/client-s3.
-  // That optional dep doesn't exist in this project, so we tell webpack to
-  // treat it as an external (empty module) to prevent the build from failing.
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      // Prevent optional AWS SDK dependency in unzipper from failing the build
-      config.externals = [
-        ...(Array.isArray(config.externals) ? config.externals : []),
-        '@aws-sdk/client-s3',
-      ]
-    }
-    return config
-  },
+  // Turbopack config (Next.js 16 uses Turbopack by default).
+  // Empty object silences the "webpack config but no turbopack config" warning.
+  turbopack: {},
+
+  // read-excel-file → unzipper → optionally imports @aws-sdk/client-s3.
+  // That optional dep doesn't exist in this project.
+  // serverExternalPackages tells Next.js to NOT bundle these packages —
+  // they stay as Node.js require() calls at runtime instead of being
+  // statically bundled, which avoids the missing optional dep error.
+  serverExternalPackages: ['read-excel-file', 'unzipper'],
 }
 
 export default nextConfig
