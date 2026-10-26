@@ -211,7 +211,7 @@ export async function GET() {
       'Primary Symptom History':      s(r.primary_symptom_history),
       'Risk Level':                   s(r.risk_level),
     }
-  })
+  })) as unknown as Record<string, CellValue>[]
 
   // ── Combine: survey responses first, then live submissions ────────────────
   const allRows = [...surveyRows, ...dailyRows]
