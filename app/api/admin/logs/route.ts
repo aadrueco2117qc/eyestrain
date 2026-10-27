@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url)
-  const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
+  const page     = Math.max(1, parseInt(searchParams.get('page')     ?? '1',  10))
   const pageSize = Math.max(1, parseInt(searchParams.get('pageSize') ?? '25', 10))
   const dateRange = searchParams.get('dateRange') ?? 'all'
 
@@ -45,7 +45,24 @@ export async function GET(request: NextRequest) {
 
   let dataQuery = adminClient
     .from('daily_logs')
-    .select('id, date, email, screen_time, sleep_hours, brightness, eye_strain, headaches, blurry_vision, dry_eyes, risk_level, created_at')
+    .select([
+      'id', 'date', 'email',
+      // Screen time (new: split by academic + non-academic, plus calculated total)
+      'academic_screen_time', 'non_academic_screen_time', 'screen_time',
+      // Environment
+      'screen_brightness', 'sleep_hours', 'primary_device',
+      'follows_20_20_20', 'break_frequency', 'dark_room_use',
+      // Symptom grid (new: frequency strings Never/Rarely/Sometimes/Often/Always)
+      'sym_dry_eyes', 'sym_blurred_vision', 'sym_headaches', 'sym_eye_irritation',
+      'sym_light_sensitivity', 'sym_mental_fatigue', 'sym_neck_shoulder_pain',
+      'sym_difficulty_focusing', 'sym_eye_itchiness',
+      // Self-assessment
+      'overall_eye_strain', 'digital_fatigue_frequency',
+      // CVSQ
+      'cvsq_frequency', 'cvsq_screen_associated',
+      // Risk
+      'risk_level', 'created_at',
+    ].join(', '))
     .order('date', { ascending: false })
     .range(offset, offset + pageSize - 1)
 

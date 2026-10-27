@@ -99,7 +99,7 @@ export default function TrendsPage() {
 
   const metricMeta = {
     eyeStrain: { label: 'Eye Strain Risk', unit: '%', current: filteredPoints.length ? Math.round(filteredPoints[filteredPoints.length - 1].eyeStrain) : 0, ...calcTrend(filteredPoints, 'eyeStrain'), color: '#ef4444' },
-    screenTime: { label: 'Daily Screen Time', unit: 'hrs', current: filteredPoints.length ? filteredPoints[filteredPoints.length - 1].screenTime.toFixed(1) : '0.0', ...calcTrend(filteredPoints, 'screenTime'), color: '#3b82f6' },
+    screenTime: { label: 'Daily Screen Time', unit: 'hrs', current: filteredPoints.length ? filteredPoints[filteredPoints.length - 1].screenTime.toFixed(1) : '0.0', ...calcTrend(filteredPoints, 'screenTime'), color: 'var(--color-primary)' },
     fatigue: { label: 'Fatigue Index', unit: '/100', current: filteredPoints.length ? Math.round(filteredPoints[filteredPoints.length - 1].fatigue) : 0, ...calcTrend(filteredPoints, 'fatigue'), color: '#f59e0b' },
   };
   const selected = metricMeta[metric];
@@ -194,9 +194,9 @@ export default function TrendsPage() {
         {/* Insights */}
         <ChartCard title="Trend Insights">
           <div className="space-y-4">
-            <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
-              <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">Pattern Analysis</p>
-              <p className="text-sm text-blue-800 dark:text-blue-200 mt-2">
+            <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+              <p className="text-sm font-semibold text-primary">Pattern Analysis</p>
+              <p className="text-sm text-primary/80 mt-2">
                 {selected.trend === 'up' ? `Your ${selected.label.toLowerCase()} has been increasing. Consider implementing preventive measures.` :
                  selected.trend === 'down' ? `Your ${selected.label.toLowerCase()} has been decreasing — a positive sign. Keep up your current habits.` :
                  `Your ${selected.label.toLowerCase()} has been relatively stable across your logged entries.`}

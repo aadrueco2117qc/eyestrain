@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
 
 interface UserRow {
   userId: string | null
@@ -24,8 +24,13 @@ type SourceFilter = (typeof SOURCE_OPTIONS)[number]
 const FIELD_OPTIONS = ['All', 'IT / Computer Science', 'Engineering', 'Business', 'Health Sciences', 'Education', 'Arts and Humanities', 'Other'] as const
 type FieldFilter = (typeof FIELD_OPTIONS)[number]
 
-const YEAR_OPTIONS = ['All', '1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year or higher'] as const
+const YEAR_OPTIONS = ['All', '1st Year', '2nd Year', '3rd Year', '4th Year', 'Others'] as const
 type YearFilter = (typeof YEAR_OPTIONS)[number]
+
+type SortKey = 'email' | 'age' | 'gender' | 'yearLevel' | 'fieldOfStudy' | 'lastLogDate' | 'lastRiskLevel'
+type SortDir = 'asc' | 'desc'
+
+const RISK_ORDER: Record<string, number> = { Low: 0, Moderate: 1, High: 2, Critical: 3 }
 
 const riskColors: Record<string, string> = {
   Low: 'text-green-600',
@@ -43,6 +48,14 @@ const riskBadgeColors: Record<string, string> = {
 
 const PAGE_SIZE = 20
 
+// ── Sort icon helper ──────────────────────────────────────────────────────────
+function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
+  if (col !== sortKey) return <ChevronsUpDown className="w-3.5 h-3.5 ml-1 opacity-40 inline-block" />
+  return sortDir === 'asc'
+    ? <ChevronUp className="w-3.5 h-3.5 ml-1 text-primary inline-block" />
+    : <ChevronDown className="w-3.5 h-3.5 ml-1 text-primary inline-block" />
+}
+
 export default function AdminUsersPage() {
   const router = useRouter()
   const [allUsers, setAllUsers] = useState<UserRow[]>([])
@@ -55,6 +68,8 @@ export default function AdminUsersPage() {
   const [fieldFilter, setFieldFilter] = useState<FieldFilter>('All')
   const [yearFilter, setYearFilter] = useState<YearFilter>('All')
   const [page, setPage] = useState(1)
+  const [sortKey, setSortKey] = useState<SortKey>('email')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
 
   useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 300)
@@ -85,23 +100,67 @@ export default function AdminUsersPage() {
   const registeredCount = useMemo(() => allUsers.filter((u) => u.userId).length, [allUsers])
   const surveyCount = useMemo(() => allUsers.filter((u) => !u.userId).length, [allUsers])
 
+  // Normalize year level: treat "5th Year or higher" as "Others" for matching
+  const normalizeYear = (y: string | null) => {
+    if (!y) return null
+    if (y === '5th Year or higher') return 'Others'
+    return y
+  }
+
   const filteredUsers = useMemo(() => allUsers.filter((u) => {
     const matchesSearch = !debouncedSearch || u.email.toLowerCase().includes(debouncedSearch.toLowerCase())
     const matchesRisk = riskFilter === 'All' || u.lastRiskLevel === riskFilter
     const matchesSource = sourceFilter === 'All' || (sourceFilter === 'Registered' ? !!u.userId : !u.userId)
     const matchesField = fieldFilter === 'All' || u.fieldOfStudy === fieldFilter
-    const matchesYear = yearFilter === 'All' || u.yearLevel === yearFilter
+    const normalizedYear = normalizeYear(u.yearLevel)
+    const matchesYear = yearFilter === 'All' || normalizedYear === yearFilter
     return matchesSearch && matchesRisk && matchesSource && matchesField && matchesYear
   }), [allUsers, debouncedSearch, riskFilter, sourceFilter, fieldFilter, yearFilter])
 
-  const totalCount = filteredUsers.length
+  // Sort
+  const sortedUsers = useMemo(() => {
+    return [...filteredUsers].sort((a, b) => {
+      let aVal: string | number | null
+      let bVal: string | number | null
+
+      if (sortKey === 'lastRiskLevel') {
+        aVal = RISK_ORDER[a.lastRiskLevel] ?? -1
+        bVal = RISK_ORDER[b.lastRiskLevel] ?? -1
+      } else if (sortKey === 'age') {
+        aVal = a.age ?? -1
+        bVal = b.age ?? -1
+      } else {
+        aVal = (a[sortKey] ?? '').toString().toLowerCase()
+        bVal = (b[sortKey] ?? '').toString().toLowerCase()
+      }
+
+      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1
+      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [filteredUsers, sortKey, sortDir])
+
+  const handleSort = (col: SortKey) => {
+    if (sortKey === col) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(col)
+      setSortDir('asc')
+    }
+    setPage(1)
+  }
+
+  const totalCount = sortedUsers.length
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
-  const pageUsers = filteredUsers.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  const pageUsers = sortedUsers.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   const handleRowClick = (userId: string | null, email: string) => {
     router.push(`/admin/users/${userId ?? encodeURIComponent(email)}`)
   }
+
+  const thClass = (col: SortKey) =>
+    `px-4 py-3 text-left font-semibold text-foreground cursor-pointer select-none whitespace-nowrap hover:bg-muted/70 transition-colors ${sortKey === col ? 'text-primary' : ''}`
 
   return (
     <div className="space-y-6">
@@ -110,7 +169,7 @@ export default function AdminUsersPage() {
         <p className="text-muted-foreground mt-1">All users and survey respondents — rows without a user account are imported survey data</p>
       </div>
 
-      {/* Search + Risk filter */}
+      {/* Search + filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative max-w-sm flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -152,7 +211,7 @@ export default function AdminUsersPage() {
           </button>
           <button
             onClick={() => setSourceFilter((prev) => prev === 'Registered' ? 'All' : 'Registered')}
-            className={`px-3 py-1 rounded-full border transition-colors text-xs font-medium ${sourceFilter === 'Registered' ? 'bg-blue-600 text-white border-blue-600' : 'border-border text-muted-foreground hover:bg-muted'}`}
+            className={`px-3 py-1 rounded-full border transition-colors text-xs font-medium ${sourceFilter === 'Registered' ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}
             aria-pressed={sourceFilter === 'Registered'}
           >
             Registered: {registeredCount}
@@ -178,16 +237,30 @@ export default function AdminUsersPage() {
       <div className="border border-border rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <caption className="sr-only">Respondents list</caption>
+            <caption className="sr-only">Respondents list — click column headers to sort</caption>
             <thead className="bg-muted">
               <tr>
-                <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground">Email</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground">Age</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground">Gender</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground">Year Level</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground">Field of Study</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground">Last Log</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground">Risk Level</th>
+                <th scope="col" className={thClass('email')} onClick={() => handleSort('email')} aria-sort={sortKey === 'email' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                  Email <SortIcon col="email" sortKey={sortKey} sortDir={sortDir} />
+                </th>
+                <th scope="col" className={thClass('age')} onClick={() => handleSort('age')} aria-sort={sortKey === 'age' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                  Age <SortIcon col="age" sortKey={sortKey} sortDir={sortDir} />
+                </th>
+                <th scope="col" className={thClass('gender')} onClick={() => handleSort('gender')} aria-sort={sortKey === 'gender' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                  Gender <SortIcon col="gender" sortKey={sortKey} sortDir={sortDir} />
+                </th>
+                <th scope="col" className={thClass('yearLevel')} onClick={() => handleSort('yearLevel')} aria-sort={sortKey === 'yearLevel' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                  Year Level <SortIcon col="yearLevel" sortKey={sortKey} sortDir={sortDir} />
+                </th>
+                <th scope="col" className={thClass('fieldOfStudy')} onClick={() => handleSort('fieldOfStudy')} aria-sort={sortKey === 'fieldOfStudy' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                  Field of Study <SortIcon col="fieldOfStudy" sortKey={sortKey} sortDir={sortDir} />
+                </th>
+                <th scope="col" className={thClass('lastLogDate')} onClick={() => handleSort('lastLogDate')} aria-sort={sortKey === 'lastLogDate' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                  Last Log <SortIcon col="lastLogDate" sortKey={sortKey} sortDir={sortDir} />
+                </th>
+                <th scope="col" className={thClass('lastRiskLevel')} onClick={() => handleSort('lastRiskLevel')} aria-sort={sortKey === 'lastRiskLevel' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                  Risk Level <SortIcon col="lastRiskLevel" sortKey={sortKey} sortDir={sortDir} />
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -208,7 +281,7 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{user.age ?? '—'}</td>
                     <td className="px-4 py-3 text-muted-foreground">{user.gender ?? '—'}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{user.yearLevel ?? '—'}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{normalizeYear(user.yearLevel) ?? '—'}</td>
                     <td className="px-4 py-3 text-muted-foreground">{user.fieldOfStudy ?? '—'}</td>
                     <td className="px-4 py-3 text-muted-foreground">{user.lastLogDate}</td>
                     <td className={`px-4 py-3 font-medium ${riskColors[user.lastRiskLevel] ?? 'text-foreground'}`}>{user.lastRiskLevel || '—'}</td>

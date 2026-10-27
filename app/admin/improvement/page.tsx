@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp,
@@ -388,7 +388,7 @@ export default function ImprovementPage() {
                     const st = STATUS_STYLES[row.status]
                     const isOpen = expanded.has(row.userId)
                     return (
-                      <>
+                      <React.Fragment key={row.userId}>
                         <tr
                           key={row.userId}
                           className="border-t border-border hover:bg-muted/40 cursor-pointer transition-colors"
@@ -452,7 +452,7 @@ export default function ImprovementPage() {
 
                         {/* Expanded detail row */}
                         {isOpen && <ExpandedDetail key={`${row.userId}-detail`} row={row} />}
-                      </>
+                      </React.Fragment>
                     )
                   })}
                 </tbody>

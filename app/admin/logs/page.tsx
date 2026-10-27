@@ -7,13 +7,31 @@ interface LogEntry {
   id: string
   date: string
   email: string | null
+  // Screen time
+  academic_screen_time: string | null
+  non_academic_screen_time: string | null
   screen_time: number | null
+  // Environment
+  screen_brightness: string | null
   sleep_hours: number | null
-  brightness: number | null
-  eye_strain: number | null
-  headaches: number | null
-  blurry_vision: number | null
-  dry_eyes: number | null
+  primary_device: string | null
+  follows_20_20_20: string | null
+  break_frequency: string | null
+  dark_room_use: string | null
+  // Symptoms (frequency strings)
+  sym_dry_eyes: string | null
+  sym_blurred_vision: string | null
+  sym_headaches: string | null
+  sym_eye_irritation: string | null
+  sym_light_sensitivity: string | null
+  sym_mental_fatigue: string | null
+  sym_neck_shoulder_pain: string | null
+  sym_difficulty_focusing: string | null
+  sym_eye_itchiness: string | null
+  // Self-assessment
+  overall_eye_strain: string | null
+  digital_fatigue_frequency: string | null
+  // Risk
   risk_level: string | null
 }
 
@@ -27,33 +45,34 @@ interface LogsResponse {
 type DateRange = 'today' | '7days' | '30days' | 'all'
 
 const DATE_RANGE_LABELS: Record<DateRange, string> = {
-  today: 'Today',
-  '7days': 'Last 7 days',
-  '30days': 'Last 30 days',
-  all: 'All time',
+  today: 'Today', '7days': 'Last 7 days', '30days': 'Last 30 days', all: 'All time',
 }
 
 const riskBadge: Record<string, string> = {
-  Low: 'bg-green-500/10 text-green-700 dark:text-green-400',
+  Low:      'bg-green-500/10  text-green-700  dark:text-green-400',
   Moderate: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
-  High: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
-  Critical: 'bg-red-500/10 text-red-700 dark:text-red-400',
+  High:     'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+  Critical: 'bg-red-500/10    text-red-700    dark:text-red-400',
 }
 
-function YesNoBadge({ value }: { value: number | null }) {
-  const isYes = value === 1
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${isYes ? 'bg-red-500/10 text-red-700 dark:text-red-400' : 'bg-muted text-muted-foreground'}`}>
-      {isYes ? 'Yes' : 'No'}
-    </span>
-  )
+const symColor: Record<string, string> = {
+  Never:     'text-muted-foreground',
+  Rarely:    'text-yellow-600 dark:text-yellow-400',
+  Sometimes: 'text-orange-500',
+  Often:     'text-orange-600',
+  Always:    'text-red-600 dark:text-red-400',
+}
+
+function FreqBadge({ value }: { value: string | null }) {
+  if (!value || value === 'Never') return <span className="text-xs text-muted-foreground">—</span>
+  return <span className={`text-xs font-medium ${symColor[value] ?? 'text-foreground'}`}>{value}</span>
 }
 
 export default function AdminLogsPage() {
-  const [data, setData] = useState<LogsResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [page, setPage] = useState(1)
+  const [data,      setData]      = useState<LogsResponse | null>(null)
+  const [loading,   setLoading]   = useState(true)
+  const [error,     setError]     = useState('')
+  const [page,      setPage]      = useState(1)
   const [dateRange, setDateRange] = useState<DateRange>('all')
 
   const fetchLogs = useCallback(async () => {
@@ -84,7 +103,8 @@ export default function AdminLogsPage() {
       <div className="flex items-center gap-2 flex-wrap">
         <Calendar className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
         {(Object.keys(DATE_RANGE_LABELS) as DateRange[]).map((range) => (
-          <button key={range} onClick={() => handleDateRangeChange(range)} aria-pressed={dateRange === range} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${dateRange === range ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}>
+          <button key={range} onClick={() => handleDateRangeChange(range)} aria-pressed={dateRange === range}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${dateRange === range ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}>
             {DATE_RANGE_LABELS[range]}
           </button>
         ))}
@@ -94,47 +114,63 @@ export default function AdminLogsPage() {
 
       {/* Table */}
       <div className="border border-border rounded-xl overflow-hidden">
+        <p className="text-xs text-muted-foreground px-4 pt-3 pb-1">Scroll right to see all columns →</p>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <caption className="sr-only">Daily log entries</caption>
             <thead className="bg-muted">
               <tr>
-                <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground whitespace-nowrap">Date</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground">Email</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground whitespace-nowrap">Screen Time</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground whitespace-nowrap">Sleep (hrs)</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground">Brightness</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground whitespace-nowrap">Eye Strain</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground">Headaches</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground whitespace-nowrap">Dry Eyes</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground whitespace-nowrap">Blurry Vision</th>
-                <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground whitespace-nowrap">Risk Level</th>
+                <th scope="col" className="px-3 py-2.5 text-left font-semibold text-foreground whitespace-nowrap">Date</th>
+                <th scope="col" className="px-3 py-2.5 text-left font-semibold text-foreground whitespace-nowrap">Email</th>
+                <th scope="col" className="px-3 py-2.5 text-left font-semibold text-foreground whitespace-nowrap">Screen Time</th>
+                <th scope="col" className="px-3 py-2.5 text-left font-semibold text-foreground whitespace-nowrap">Sleep</th>
+                <th scope="col" className="px-3 py-2.5 text-left font-semibold text-foreground whitespace-nowrap">Brightness</th>
+                <th scope="col" className="px-3 py-2.5 text-left font-semibold text-foreground whitespace-nowrap">20-20-20</th>
+                <th scope="col" className="px-3 py-2.5 text-left font-semibold text-foreground whitespace-nowrap">Breaks</th>
+                <th scope="col" className="px-3 py-2.5 text-left font-semibold text-foreground whitespace-nowrap">Blurred Vision</th>
+                <th scope="col" className="px-3 py-2.5 text-left font-semibold text-foreground whitespace-nowrap">Dry Eyes</th>
+                <th scope="col" className="px-3 py-2.5 text-left font-semibold text-foreground whitespace-nowrap">Headaches</th>
+                <th scope="col" className="px-3 py-2.5 text-left font-semibold text-foreground whitespace-nowrap">Eye Irritation</th>
+                <th scope="col" className="px-3 py-2.5 text-left font-semibold text-foreground whitespace-nowrap">Mental Fatigue</th>
+                <th scope="col" className="px-3 py-2.5 text-left font-semibold text-foreground whitespace-nowrap">Overall Strain</th>
+                <th scope="col" className="px-3 py-2.5 text-left font-semibold text-foreground whitespace-nowrap">Risk</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground" aria-busy="true">Loading…</td></tr>
+                <tr><td colSpan={14} className="px-3 py-8 text-center text-muted-foreground" aria-busy="true">Loading…</td></tr>
               ) : !data || data.logs.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">No log entries found.</td></tr>
+                <tr><td colSpan={14} className="px-3 py-8 text-center text-muted-foreground">No log entries found.</td></tr>
               ) : (
-                data.logs.map((log) => (
-                  <tr key={log.id} className="border-t border-border hover:bg-muted/50 transition-colors">
-                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{log.date}</td>
-                    <td className="px-4 py-3 text-foreground font-medium">{log.email || '—'}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{log.screen_time != null ? `${log.screen_time}h` : '—'}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{log.sleep_hours != null ? `${log.sleep_hours}h` : '—'}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{log.brightness != null ? `${log.brightness}%` : '—'}</td>
-                    <td className="px-4 py-3"><YesNoBadge value={log.eye_strain} /></td>
-                    <td className="px-4 py-3"><YesNoBadge value={log.headaches} /></td>
-                    <td className="px-4 py-3"><YesNoBadge value={log.dry_eyes} /></td>
-                    <td className="px-4 py-3"><YesNoBadge value={log.blurry_vision} /></td>
-                    <td className="px-4 py-3">
-                      {log.risk_level ? (
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${riskBadge[log.risk_level] ?? 'bg-muted text-muted-foreground'}`}>{log.risk_level}</span>
-                      ) : <span className="text-muted-foreground">—</span>}
-                    </td>
-                  </tr>
-                ))
+                data.logs.map((log) => {
+                  const screenDisplay = log.screen_time != null
+                    ? `${log.screen_time}h`
+                    : log.academic_screen_time
+                      ? log.academic_screen_time.replace(' hours', 'h').replace('Less than ', '<').replace('More than ', '>').replace('–', '–')
+                      : '—'
+                  return (
+                    <tr key={log.id} className="border-t border-border hover:bg-muted/50 transition-colors">
+                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{log.date}</td>
+                      <td className="px-3 py-2 text-foreground font-medium max-w-[160px] truncate">{log.email || '—'}</td>
+                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{screenDisplay}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{log.sleep_hours != null ? `${log.sleep_hours}h` : '—'}</td>
+                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{log.screen_brightness ?? '—'}</td>
+                      <td className="px-3 py-2"><FreqBadge value={log.follows_20_20_20} /></td>
+                      <td className="px-3 py-2 text-muted-foreground">{log.break_frequency ? log.break_frequency.replace('Every ', '').replace(' minutes', 'min').replace(' hours', 'h') : '—'}</td>
+                      <td className="px-3 py-2"><FreqBadge value={log.sym_blurred_vision} /></td>
+                      <td className="px-3 py-2"><FreqBadge value={log.sym_dry_eyes} /></td>
+                      <td className="px-3 py-2"><FreqBadge value={log.sym_headaches} /></td>
+                      <td className="px-3 py-2"><FreqBadge value={log.sym_eye_irritation} /></td>
+                      <td className="px-3 py-2"><FreqBadge value={log.sym_mental_fatigue} /></td>
+                      <td className="px-3 py-2 text-muted-foreground">{log.overall_eye_strain ?? '—'}</td>
+                      <td className="px-3 py-2">
+                        {log.risk_level
+                          ? <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${riskBadge[log.risk_level] ?? 'bg-muted text-muted-foreground'}`}>{log.risk_level}</span>
+                          : <span className="text-muted-foreground">—</span>}
+                      </td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>

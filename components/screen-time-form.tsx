@@ -1,943 +1,928 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { Button, InputField, TextAreaField } from '@/components/form-components';
-import { AlertCircle, ChevronDown } from 'lucide-react';
+import { useState, useCallback, useRef } from 'react';
+import { Button } from '@/components/form-components';
+import { AlertCircle, CheckCircle2, ClipboardList, Activity, Info, X, Pencil, User } from 'lucide-react';
 
-interface FormData {
-  // Section 1: Student Profile
+// ─────────────────────────────────────────────────────────────────────────────
+// SYMPTOM DEFINITIONS — shown when the user taps the ⓘ icon
+// ─────────────────────────────────────────────────────────────────────────────
+const SYMPTOM_DEFINITIONS: Record<string, { what: string; example: string }> = {
+  // CVSQ Q1 — Visual complaints
+  'Blurred vision': {
+    what: 'Images or text appear out of focus or unclear, even when looking directly at them.',
+    example: 'Words on your screen look fuzzy and sharpening your focus doesn\'t help.',
+  },
+  'Eye strain / fatigue': {
+    what: 'A tired, sore, or aching feeling in or around the eyes after prolonged visual tasks.',
+    example: 'Your eyes feel exhausted and heavy after a long study session.',
+  },
+  'Double vision / diplopia': {
+    what: 'Seeing two overlapping images of the same object instead of one clear image.',
+    example: 'A single word on the screen appears to split into two side-by-side copies.',
+  },
+  'Difficulty refocusing eyes': {
+    what: 'Trouble quickly shifting focus between a nearby screen and a distant object (or vice versa).',
+    example: 'After staring at your laptop, glancing across the room takes several seconds to come into focus.',
+  },
+  'Near vision discomfort / difficulty': {
+    what: 'Discomfort or difficulty seeing clearly at close distances, such as reading on a screen.',
+    example: 'Text at normal reading distance looks unclear or causes eye discomfort.',
+  },
+  'Unclear objects post-screen use': {
+    what: 'Objects look temporarily blurry or hazy right after you stop looking at a screen.',
+    example: 'After closing your laptop, distant objects look foggy for a few minutes.',
+  },
+  'Glare / seeing halos of light': {
+    what: 'Bright rings or star-burst patterns appear around light sources.',
+    example: 'Street lights or the screen backlight appear surrounded by a glowing halo.',
+  },
+  'Feeling of diminished vision': {
+    what: 'A subjective sense that your eyesight is temporarily not as sharp as usual.',
+    example: 'Everything looks slightly dim or less detailed than normal after screen use.',
+  },
+  'Increased sensitivity to light': {
+    what: 'Normal indoor or outdoor light feels uncomfortably bright or causes squinting.',
+    example: 'Walking outside after studying feels painfully bright even on a cloudy day.',
+  },
+  // CVSQ Q2 — Ocular surface complaints
+  'Dry eyes': {
+    what: 'A gritty, scratchy, or burning sensation caused by insufficient tear production or rapid tear evaporation.',
+    example: 'Your eyes feel like sand is in them, especially after staring at a screen for hours.',
+  },
+  'Eye redness': {
+    what: 'The white part of the eye appears pink or red due to irritated or dilated blood vessels.',
+    example: 'Friends comment your eyes look red even though you feel fine.',
+  },
+  'Eye irritation / discomfort': {
+    what: 'A general uncomfortable or bothersome feeling in the eye that is hard to pinpoint.',
+    example: 'Your eyes just feel "off" — not painful, but persistently uncomfortable.',
+  },
+  'Foreign body sensation': {
+    what: 'The feeling that something (like dust or an eyelash) is stuck in your eye, even when nothing is there.',
+    example: 'You keep blinking and rubbing your eye trying to remove something that isn\'t there.',
+  },
+  'Burning / stinging sensation': {
+    what: 'A sharp, painful, hot feeling on the surface of the eye.',
+    example: 'Your eyes feel like they are stinging as if from smoke or chlorine.',
+  },
+  'Itching / eye rubbing': {
+    what: 'An urge to rub or scratch the eyes due to an itchy feeling on the eyelid or eye surface.',
+    example: 'You constantly rub your eyes during or after screen use even though they aren\'t watery.',
+  },
+  'Lacrimation / watery eye': {
+    what: 'Excessive tearing or watering of the eyes, often a reflex response to dryness or irritation.',
+    example: 'Your eyes water so much during reading that you have to wipe them repeatedly.',
+  },
+  'Eyelids feel heavy': {
+    what: 'A drooping, weighted sensation in the eyelids that makes keeping them open feel like effort.',
+    example: 'You struggle to keep your eyes open during an online lecture, not from sleepiness but from eye tiredness.',
+  },
+  'Frequent blinking': {
+    what: 'Blinking much more often than normal, often as an involuntary response to eye dryness or irritation.',
+    example: 'You notice yourself blinking rapidly every few seconds while reading.',
+  },
+  // CVSQ Q3 — Extraocular complaints
+  'Headache': {
+    what: 'Pain or pressure in the head, often around the temples, forehead, or back of the skull, triggered or worsened by screen use.',
+    example: 'A dull throbbing starts at your temples after two hours of online classes.',
+  },
+  'Neck pain': {
+    what: 'Stiffness, aching, or soreness in the neck muscles, often from holding the head in a fixed position while looking at a screen.',
+    example: 'Your neck feels stiff and sore after a long study session at your desk.',
+  },
+  'Shoulder pain': {
+    what: 'Tension, aching, or tightness in the shoulder muscles from prolonged poor posture during screen use.',
+    example: 'Your shoulders feel knotted and raised up toward your ears after hours at the computer.',
+  },
+  'Back pain': {
+    what: 'Discomfort or aching in the upper or lower back caused by sustained seated posture during screen activities.',
+    example: 'Your lower back aches after a full day of online classes.',
+  },
+  'Joint pain in fingers and wrists': {
+    what: 'Stiffness, soreness, or aching in the fingers or wrists from repetitive typing or scrolling.',
+    example: 'Your wrists feel stiff and achy after a long typing or gaming session.',
+  },
+  'Inability to hold objects well': {
+    what: 'A temporary weakness or loss of grip strength in the hands, sometimes after long periods of keyboard or touchscreen use.',
+    example: 'After extended typing, your fingers feel weak and clumsy.',
+  },
+  'Difficulty writing using a pen': {
+    what: 'Fine motor difficulty or hand fatigue that makes handwriting feel harder than usual after extended digital device use.',
+    example: 'When switching from typing to writing by hand, your grip feels shaky or uncomfortable.',
+  },
+  'Sleep disturbances / insomnia': {
+    what: 'Difficulty falling asleep, staying asleep, or feeling rested — often linked to blue-light exposure and mental stimulation from screens before bed.',
+    example: 'You lie awake for an hour after late-night screen use even though you feel tired.',
+  },
+  'Inattention / depression': {
+    what: 'Reduced ability to concentrate, feelings of mental fog, low mood, or low motivation — sometimes associated with excessive screen time and eye fatigue.',
+    example: 'After a heavy day of screen use, you feel mentally exhausted, unmotivated, and unable to focus on anything.',
+  },
+  // CVS-Smart Q4 — Frequency of complaints
+  // Anchored to the CVS-F4 Criterion 5 published in Iqbal et al. (2024):
+  // "≥2 symptoms/attacks per month over the last 12 months" is the clinical
+  // threshold for a positive CVS case.
+  'Rare': {
+    what: 'Your complaints occur less than twice a month — fewer than 2 episodes in any given 4-week period.',
+    example: 'You noticed eye discomfort once last month and maybe once the month before. It does not happen on a regular basis.',
+  },
+  'Infrequent': {
+    what: 'Your complaints occur at least twice a month but not on most days — roughly 2–8 episodes per month (about once or twice a week).',
+    example: 'A couple of times each week after long screen sessions you get a headache or dry eyes, but not every day.',
+  },
+  'Frequent': {
+    what: 'Your complaints happen most days — more than 8 episodes per month, meaning you experience symptoms on the majority of days you use a screen.',
+    example: 'Almost every day after your online classes you experience eye strain, blurred vision, or a headache.',
+  },
+  // CVS-Smart Q5 — Screen association
+  'Never (screen)': {
+    what: 'Your complaints have no connection to screen use — they happen at random times regardless of devices.',
+    example: 'You get headaches even on days you don\'t use screens at all.',
+  },
+  'Sometimes (screen)': {
+    what: 'Your complaints appear during or after screen use on some occasions but not consistently every time.',
+    example: 'After long study sessions you often feel eye strain, but short use doesn\'t trigger it.',
+  },
+  'Always (screen)': {
+    what: 'Your complaints reliably start or worsen every time you use a screen, and improve when you stop.',
+    example: 'Within an hour of using your laptop your eyes always start burning, and the burning fades after you stop.',
+  },
+  // Q19 symptom grid frequency scale
+  'Never': {
+    what: 'You did not experience this symptom at all in the past week (0 out of 7 days).',
+    example: 'Zero days out of the past 7 days did you feel this.',
+  },
+  'Rarely': {
+    what: 'You experienced this symptom on 1 day out of the past week — it happened briefly and mildly.',
+    example: 'It happened once, briefly, and didn\'t bother you much.',
+  },
+  'Sometimes': {
+    what: 'You experienced this symptom on 2–3 days out of the past week — noticeable but not a daily occurrence.',
+    example: 'A couple of times during the week you noticed this symptom during or after screen use.',
+  },
+  'Often': {
+    what: 'You experienced this symptom on 4–5 days out of the past week — present most days this week.',
+    example: 'Most days this week you felt this symptom, especially during heavy screen sessions.',
+  },
+  'Always': {
+    what: 'You experienced this symptom on 6–7 days out of the past week — present almost every day.',
+    example: 'This symptom was present almost every time you used a screen this week.',
+  },
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INFO POPUP COMPONENT
+// ─────────────────────────────────────────────────────────────────────────────
+function InfoButton({ term }: { term: string }) {
+  const [open, setOpen] = useState(false)
+  const def = SYMPTOM_DEFINITIONS[term]
+  if (!def) return null
+
+  return (
+    <span className="relative inline-flex items-center ml-1.5 flex-shrink-0">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}
+        aria-label={`What is ${term}?`}
+        className="w-4 h-4 rounded-full flex items-center justify-center text-muted-foreground hover:text-[#f97316] transition-colors focus:outline-none focus:ring-1 focus:ring-[#f97316]"
+      >
+        <Info className="w-3.5 h-3.5" />
+      </button>
+      {open && (
+        <>
+          <span className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden="true" />
+          <span className="absolute left-0 top-6 z-50 w-72 rounded-xl border border-[#f97316]/25 bg-card shadow-xl p-4 text-left" role="tooltip">
+            <span className="flex items-start justify-between gap-2 mb-2">
+              <span className="text-sm font-semibold text-[#f97316] leading-snug">{term}</span>
+              <button type="button" onClick={(e) => { e.stopPropagation(); setOpen(false) }} className="text-muted-foreground hover:text-foreground flex-shrink-0 mt-0.5" aria-label="Close">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </span>
+            <span className="block text-xs text-foreground leading-relaxed mb-2">{def.what}</span>
+            <span className="block text-xs text-muted-foreground leading-relaxed border-t border-border pt-2">
+              <span className="font-medium text-foreground">Example: </span>{def.example}
+            </span>
+          </span>
+        </>
+      )}
+    </span>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TYPES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** PART 1 — CVS-Smart Questionnaire (Iqbal et al., 2024) */
+interface CvsqData {
+  cvsq_visual: string[];
+  cvsq_ocular: string[];
+  cvsq_extraocular: string[];
+  cvsq_frequency: string;
+  cvsq_screen_associated: string;
+}
+
+/** PART 2 — EyeGuard Behavioral Survey */
+interface SurveyData {
   age: string;
   gender: string;
   yearLevel: string;
   fieldOfStudy: string;
-  // Section 2: Daily Screen Time
+  firstName: string;
+  lastName: string;
   academicScreenTime: string;
   nonAcademicScreenTime: string;
   primaryDevice: string;
-  // Section 3: Eye Strain & Symptoms
-  eyeStrainFrequency: string;
-  headachesFrequency: string;
-  blurryVisionFrequency: string;
-  dryEyesFrequency: string;
-  // Section 4: Lifestyle & Habits
-  exerciseFrequency: string;
-  outdoorTime: string;
-  blueLight: string;
-  screenHeight: string;
-  // Section 5: Environment & Settings
+  continuousScreenUse: string;
+  onlineClassesPerDay: string;
+  follows202020: string;
+  blueLightFilter: string;
   screenBrightness: string;
-  sleepHours: string;
+  darkRoomUse: string;
   screenDistance: string;
-  roomLighting: string;
-  // Section 6: Additional Information
-  additionalNotes: string;
+  wearsGlasses: string;
+  blueLightGlasses: string;
+  breakFrequency: string;
+  sleepHours: string;
+  sym_dryEyes: string;
+  sym_eyeItchiness: string;
+  sym_blurredVision: string;
+  sym_headaches: string;
+  sym_eyeIrritation: string;
+  sym_lightSensitivity: string;
+  sym_difficultyFocusing: string;
+  sym_neckShoulderPain: string;
+  sym_mentalFatigue: string;
+  sym_difficultyConcentrating: string;
+  overallEyeStrain: string;
+  digitalFatigueFrequency: string;
+  primarySymptomHistory: string;
 }
 
-const SectionHeader = ({ number, title }: { number: number; title: string }) => (
-  <div className="mb-8">
-    <div className="flex items-center gap-3 mb-3">
-      <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
-        {number}
-      </div>
-      <h2 className="text-lg sm:text-xl font-semibold text-foreground">
-        SECTION {number}: {title}
-      </h2>
-    </div>
-    <div className="h-1 w-16 bg-primary rounded-full" />
-  </div>
-);
+export interface FullFormData extends CvsqData, SurveyData {}
 
-const FormSection = ({ children }: { children: React.ReactNode }) => (
-  <div className="space-y-6">{children}</div>
-);
-
-const FormField = ({
-  label,
-  required,
-  children,
-  fieldId,
-}: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-  fieldId?: string;
-}) => (
-  <div className="space-y-3">
-    <label htmlFor={fieldId} className="text-sm font-medium text-foreground block">
-      {label}
-      {required && (
-        <span className="text-red-500 ml-1" aria-hidden="true">
-          *
-        </span>
-      )}
-    </label>
-    {children}
-  </div>
-);
-
-interface ScreenTimeFormProps {
-  onSubmit: (data: {
-    screenTime: number;
-    breaksTaken: number;
-    symptoms: string[];
-    brightness: number;
-    sleepHours: number;
-    notes: string;
-    age?: string;
-    gender?: string;
-    yearLevel?: string;
-    fieldOfStudy?: string;
-    academicScreenTime?: string;
-    nonAcademicScreenTime?: string;
-    primaryDevice?: string;
-    eyeStrainFrequency?: string;
-    headachesFrequency?: string;
-    blurryVisionFrequency?: string;
-    dryEyesFrequency?: string;
+export interface ScreenTimeFormProps {
+  onSubmit: (data: FullFormData) => Promise<void>;
+  onProfileUpdate?: (profile: {
+    firstName: string; lastName: string; age: string;
+    gender: string; yearLevel: string; fieldOfStudy: string;
   }) => Promise<void>;
-  defaultValues?: {
-    age?: string;
-    gender?: string;
-    yearLevel?: string;
-    fieldOfStudy?: string;
-    academicScreenTime?: string;
-    nonAcademicScreenTime?: string;
-    primaryDevice?: string;
-    eyeStrainFrequency?: string;
-    headachesFrequency?: string;
-    blurryVisionFrequency?: string;
-    dryEyesFrequency?: string;
-    exerciseFrequency?: string;
-    outdoorTime?: string;
-    blueLight?: string;
-    screenHeight?: string;
-    screenDistance?: string;
-    roomLighting?: string;
-    sleepHours?: string;
-  };
+  email?: string;
+  defaultValues?: Partial<SurveyData>;
+  profileComplete?: boolean;
 }
 
-const AGE_OPTIONS = ['17-18', '19-20', '21-22', '23+', 'Other'];
-const GENDER_OPTIONS = ['Male', 'Female', 'Prefer not to say', 'Other'];
+// ─────────────────────────────────────────────────────────────────────────────
+// CONSTANTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const VISUAL_COMPLAINTS = [
+  'Blurred vision', 'Eye strain / fatigue', 'Double vision / diplopia',
+  'Difficulty refocusing eyes', 'Near vision discomfort / difficulty',
+  'Unclear objects post-screen use', 'Glare / seeing halos of light',
+  'Feeling of diminished vision', 'Increased sensitivity to light',
+];
+const OCULAR_SURFACE_COMPLAINTS = [
+  'Dry eyes', 'Eye redness', 'Eye irritation / discomfort', 'Foreign body sensation',
+  'Burning / stinging sensation', 'Itching / eye rubbing', 'Lacrimation / watery eye',
+  'Eyelids feel heavy', 'Frequent blinking',
+];
+const EXTRAOCULAR_COMPLAINTS = [
+  'Headache', 'Neck pain', 'Shoulder pain', 'Back pain',
+  'Joint pain in fingers and wrists', 'Inability to hold objects well',
+  'Difficulty writing using a pen', 'Sleep disturbances / insomnia', 'Inattention / depression',
+];
+const CVSQ_FREQUENCY_OPTIONS = ['Rare', 'Infrequent', 'Frequent'];
+const CVSQ_SCREEN_ASSOC_OPTIONS = ['Never', 'Sometimes', 'Always'];
+
+const AGE_OPTIONS = ['17-18', '19-20', '21-22', '23+'];
+const GENDER_OPTIONS = ['Male', 'Female', 'Prefer not to say'];
 const YEAR_LEVEL_OPTIONS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year or higher'];
-const FIELD_OF_STUDY_OPTIONS = [
-  'IT / Computer Science',
-  'Engineering',
-  'Business',
-  'Health Sciences',
-  'Education',
-  'Arts and Humanities',
-  'Other',
+const FIELD_OPTIONS = ['IT / Computer Science', 'Engineering', 'Business', 'Health Sciences', 'Education', 'Arts and Humanities', 'Other'];
+const ACAD_SCREEN_OPTIONS = ['Less than 2 hours', '2–4 hours', '4–6 hours', '6–8 hours', 'More than 8 hours'];
+const NON_ACAD_SCREEN_OPTIONS = ['Less than 1 hour', '1–3 hours', '3–5 hours', '5–7 hours', 'More than 7 hours'];
+const DEVICE_OPTIONS = ['Smartphone', 'Laptop', 'Desktop Computer', 'Tablet'];
+const CONTINUOUS_USE_OPTIONS = ['Less than 30 minutes', '30–60 minutes', '1–2 hours', '2–3 hours', 'More than 3 hours'];
+const ONLINE_CLASSES_OPTIONS = ['None', '1–2', '3–4', '5 or more'];
+const YESNO_FREQ_OPTIONS = ['Always', 'Sometimes', 'Rarely', 'Never'];
+const BRIGHTNESS_OPTIONS = ['Low (0–25%)', 'Medium (26–50%)', 'Medium-High (51–75%)', 'High (76–100%)'];
+const DISTANCE_OPTIONS = ['Less than 20 cm', '20–40 cm', '40–60 cm', 'More than 60 cm'];
+const BREAK_FREQ_OPTIONS = ['Every 20 minutes', 'Every 30–60 minutes', 'Every 1–2 hours', 'Rarely take breaks'];
+const SLEEP_OPTIONS = [
+  { label: 'Less than 5 hours', value: '5' },
+  { label: '5–6 hours', value: '5.5' },
+  { label: '7–8 hours', value: '7.5' },
+  { label: 'More than 8 hours', value: '9' },
 ];
-
-const ACADEMIC_SCREEN_TIME_OPTIONS = [
-  'Less than 2 hours',
-  '2–4 hours',
-  '4–6 hours',
-  '6–8 hours',
-  'More than 8 hours',
+const SYMPTOM_SCALE = ['Never', 'Rarely', 'Sometimes', 'Often', 'Always'];
+const SYMPTOM_GRID_ITEMS = [
+  { key: 'sym_dryEyes',                label: 'Dry eyes' },
+  { key: 'sym_eyeItchiness',           label: 'Eye itchiness' },
+  { key: 'sym_blurredVision',          label: 'Blurred vision (near or far)' },
+  { key: 'sym_headaches',              label: 'Headaches (especially around temples)' },
+  { key: 'sym_eyeIrritation',          label: 'Eye irritation or burning sensation' },
+  { key: 'sym_lightSensitivity',       label: 'Sensitivity to light (photophobia)' },
+  { key: 'sym_difficultyFocusing',     label: 'Difficulty focusing on the screen' },
+  { key: 'sym_neckShoulderPain',       label: 'Neck or shoulder pain' },
+  { key: 'sym_mentalFatigue',          label: 'Feeling mentally tired after screen use' },
+  { key: 'sym_difficultyConcentrating', label: 'Difficulty concentrating after long screen exposure' },
 ];
+const OVERALL_STRAIN_OPTIONS = ['None', 'Mild', 'Moderate', 'Severe'];
+const DIGITAL_FATIGUE_OPTIONS = ['Never', 'Rarely', 'Sometimes', 'Often', 'Always'];
+const PRIMARY_SYMPTOM_OPTIONS = ['No, none (or rarely)', 'Yes — Dry Eyes', 'Yes — Blurry Vision', 'Yes — Both Dry Eyes and Blurry Vision'];
 
-const NON_ACADEMIC_SCREEN_TIME_OPTIONS = [
-  'Less than 1 hour',
-  '1–3 hours',
-  '3–5 hours',
-  '5–7 hours',
-  'More than 7 hours',
-];
+// Total pages: 0-3 = CVSQ, 4-8 = EyeGuard Survey
+const TOTAL_PAGES = 9;
 
-const PRIMARY_DEVICE_OPTIONS = ['Smartphone', 'Laptop', 'Desktop Computer', 'Tablet', 'Other'];
+function sleepHoursToOption(value?: string): string {
+  if (!value) return '';
+  const h = Number(value);
+  if (h < 5.5) return '5';
+  if (h <= 6.5) return '5.5';
+  if (h <= 8) return '7.5';
+  return '9';
+}
 
-const FREQUENCY_OPTIONS = [
-  'Never',
-  'Rarely (1-2 times a week)',
-  'Sometimes (3-4 times a week)',
-  'Often (5-6 times a week)',
-  'Always (every day)',
-];
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPER COMPONENTS
+// ─────────────────────────────────────────────────────────────────────────────
 
-const EXERCISE_OPTIONS = [
-  'None - Sedentary lifestyle',
-  'Minimal (1-2 times per week)',
-  'Moderate (3-4 times per week)',
-  'Regular (5+ times per week)',
-];
+function PartBanner({ part, title, subtitle }: { part: string; title: string; subtitle: string; color?: string }) {
+  return (
+    <div className="rounded-xl p-5 border-2 bg-[#f97316]/8 dark:bg-[#f97316]/10 border-[#f97316]/30 dark:border-[#f97316]/25">
+      <p className="text-xs font-bold uppercase tracking-widest mb-1 text-[#f97316]">{part}</p>
+      <h2 className="text-xl font-bold text-foreground">{title}</h2>
+      <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+    </div>
+  );
+}
 
-const OUTDOOR_TIME_OPTIONS = [
-  'Less than 30 minutes daily',
-  '30 minutes to 1 hour daily',
-  '1-2 hours daily',
-  'More than 2 hours daily',
-];
+function SectionHeader({ number, title }: { number: string | number; title: string }) {
+  return (
+    <div className="mb-6">
+      <div className="flex items-center gap-3 mb-2">
+        <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold flex-shrink-0">{number}</div>
+        <h3 className="text-base font-semibold text-foreground uppercase tracking-wide">{title}</h3>
+      </div>
+      <div className="h-0.5 w-12 bg-primary rounded-full ml-11" />
+    </div>
+  );
+}
 
-const BLUE_LIGHT_OPTIONS = [
-  'Never use blue light filters',
-  'Sometimes (evenings only)',
-  'Regularly (most of the time)',
-  'Always (all day)',
-];
+function FormField({ label, required, children, fieldId, hint }: {
+  label: string; required?: boolean; children: React.ReactNode; fieldId?: string; hint?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <label htmlFor={fieldId} className="text-base font-semibold text-foreground block">
+        {label}{required && <span className="text-red-500 ml-1" aria-hidden="true">*</span>}
+      </label>
+      {hint && <p className="text-xs text-muted-foreground -mt-1">{hint}</p>}
+      {children}
+    </div>
+  );
+}
 
-const SCREEN_HEIGHT_OPTIONS = [
-  'Below eye level',
-  'At eye level (optimal)',
-  'Above eye level',
-  'Varies frequently',
-];
+function RadioGroup({ name, options, value, onChange, fieldId, definitionKeys }: {
+  name: string; options: string[]; value: string;
+  onChange: (v: string) => void; fieldId?: string;
+  definitionKeys?: Record<string, string>;
+}) {
+  return (
+    <div id={fieldId} className="space-y-2">
+      {options.map((opt) => (
+        <label key={opt} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${value === opt ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}>
+          <input type="radio" name={name} value={opt} checked={value === opt} onChange={(e) => onChange(e.target.value)} className="w-4 h-4 accent-primary" />
+          <span className="flex items-center gap-0.5 text-sm text-foreground flex-1">
+            <span>{opt}</span>
+            {definitionKeys && definitionKeys[opt] && <InfoButton term={definitionKeys[opt]} />}
+          </span>
+        </label>
+      ))}
+    </div>
+  );
+}
 
-const SCREEN_DISTANCE_OPTIONS = [
-  'Less than 20cm (too close)',
-  '20-30cm (close)',
-  '30-50cm (optimal)',
-  'More than 50cm (too far)',
-];
+function SelectField({ id, value, onChange, options, placeholder }: {
+  id: string; value: string; onChange: (v: string) => void; options: string[]; placeholder: string;
+}) {
+  return (
+    <select id={id} value={value} onChange={(e) => onChange(e.target.value)}
+      className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer">
+      <option value="">{placeholder}</option>
+      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
 
-const ROOM_LIGHTING_OPTIONS = [
-  'Very dim or dark',
-  'Dim lighting',
-  'Adequate and balanced',
-  'Very bright (glare)',
-];
+function CheckboxGroup({ items, selected, onChange }: {
+  items: string[]; selected: string[]; onChange: (v: string[]) => void;
+}) {
+  const toggle = (item: string) => {
+    if (selected.includes(item)) onChange(selected.filter((s) => s !== item));
+    else onChange([...selected, item]);
+  };
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {items.map((item) => {
+        const checked = selected.includes(item);
+        return (
+          <label key={item} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${checked ? 'border-[#f97316]/60 bg-[#f97316]/10 dark:bg-[#f97316]/15' : 'border-border hover:border-[#f97316]/30 hover:bg-[#f97316]/5'}`}>
+            <input type="checkbox" checked={checked} onChange={() => toggle(item)} className="sr-only" />
+            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors ${checked ? 'bg-[#f97316] border-[#f97316]' : 'border-muted-foreground/40'}`}>
+              {checked && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" /></svg>}
+            </div>
+            <span className="flex items-center gap-0.5 text-sm text-foreground leading-snug flex-1 min-w-0">
+              <span>{item}</span>
+              <InfoButton term={item} />
+            </span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
 
-export function ScreenTimeForm({ onSubmit, defaultValues }: ScreenTimeFormProps) {
-  const [currentSection, setCurrentSection] = useState(1);
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN FORM COMPONENT
+// ─────────────────────────────────────────────────────────────────────────────
+export function ScreenTimeForm({ onSubmit, onProfileUpdate, email, defaultValues, profileComplete = false }: ScreenTimeFormProps) {
+  const [page, setPage] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [editingProfile, setEditingProfile] = useState(false);
+  const errorRef = useRef<HTMLDivElement | null>(null);
+  const topRef = useRef<HTMLDivElement | null>(null);
 
-  // Refs for auto-scrolling to the first invalid field
-  const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
-  const errorBannerRef = useRef<HTMLDivElement | null>(null);
+  const [cvsq, setCvsq] = useState<CvsqData>({
+    cvsq_visual: [], cvsq_ocular: [], cvsq_extraocular: [],
+    cvsq_frequency: '', cvsq_screen_associated: '',
+  });
 
-  const [formData, setFormData] = useState<FormData>({
+  const [survey, setSurvey] = useState<SurveyData>({
     age: defaultValues?.age || '',
     gender: defaultValues?.gender || '',
     yearLevel: defaultValues?.yearLevel || '',
     fieldOfStudy: defaultValues?.fieldOfStudy || '',
+    firstName: defaultValues?.firstName || '',
+    lastName: defaultValues?.lastName || '',
     academicScreenTime: defaultValues?.academicScreenTime || '',
     nonAcademicScreenTime: defaultValues?.nonAcademicScreenTime || '',
     primaryDevice: defaultValues?.primaryDevice || '',
-    eyeStrainFrequency: defaultValues?.eyeStrainFrequency || '',
-    headachesFrequency: defaultValues?.headachesFrequency || '',
-    blurryVisionFrequency: defaultValues?.blurryVisionFrequency || '',
-    dryEyesFrequency: defaultValues?.dryEyesFrequency || '',
-    exerciseFrequency: defaultValues?.exerciseFrequency || '',
-    outdoorTime: defaultValues?.outdoorTime || '',
-    blueLight: defaultValues?.blueLight || '',
-    screenHeight: defaultValues?.screenHeight || '',
-    sleepHours: defaultValues?.sleepHours || '',
-    screenBrightness: '0', // always starts fresh — brightness changes daily
+    continuousScreenUse: defaultValues?.continuousScreenUse || '',
+    onlineClassesPerDay: defaultValues?.onlineClassesPerDay || '',
+    follows202020: defaultValues?.follows202020 || '',
+    blueLightFilter: defaultValues?.blueLightFilter || '',
+    screenBrightness: defaultValues?.screenBrightness || '',
+    darkRoomUse: defaultValues?.darkRoomUse || '',
     screenDistance: defaultValues?.screenDistance || '',
-    roomLighting: defaultValues?.roomLighting || '',
-    additionalNotes: '',
+    wearsGlasses: defaultValues?.wearsGlasses || '',
+    blueLightGlasses: defaultValues?.blueLightGlasses || '',
+    breakFrequency: defaultValues?.breakFrequency || '',
+    sleepHours: sleepHoursToOption(defaultValues?.sleepHours),
+    sym_dryEyes: defaultValues?.sym_dryEyes || '',
+    sym_eyeItchiness: defaultValues?.sym_eyeItchiness || '',
+    sym_blurredVision: defaultValues?.sym_blurredVision || '',
+    sym_headaches: defaultValues?.sym_headaches || '',
+    sym_eyeIrritation: defaultValues?.sym_eyeIrritation || '',
+    sym_lightSensitivity: defaultValues?.sym_lightSensitivity || '',
+    sym_difficultyFocusing: defaultValues?.sym_difficultyFocusing || '',
+    sym_neckShoulderPain: defaultValues?.sym_neckShoulderPain || '',
+    sym_mentalFatigue: defaultValues?.sym_mentalFatigue || '',
+    sym_difficultyConcentrating: defaultValues?.sym_difficultyConcentrating || '',
+    overallEyeStrain: defaultValues?.overallEyeStrain || '',
+    digitalFatigueFrequency: defaultValues?.digitalFatigueFrequency || '',
+    primarySymptomHistory: defaultValues?.primarySymptomHistory || '',
   });
 
-  const handleInputChange = useCallback((field: keyof FormData, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+  const setSurveyField = useCallback((field: keyof SurveyData, value: string) => {
+    setSurvey((prev) => ({ ...prev, [field]: value }));
     setError('');
   }, []);
 
-  // Returns the fieldId of the first invalid field, or null if section is valid
-  const validateSection = (section: number): string | null => {
-    switch (section) {
-      case 1:
-        if (!formData.age) {
-          setError('Please select your age range');
-          return 'age';
-        }
-        if (!formData.gender) {
-          setError('Please select your gender');
-          return 'gender';
-        }
-        if (!formData.yearLevel) {
-          setError('Please select your year level');
-          return 'yearLevel';
-        }
-        if (!formData.fieldOfStudy) {
-          setError('Please select your field of study');
-          return 'fieldOfStudy';
-        }
-        return null;
-      case 2:
-        if (!formData.academicScreenTime) {
-          setError('Please select your academic screen time');
-          return 'academicScreenTime';
-        }
-        if (!formData.nonAcademicScreenTime) {
-          setError('Please select your non-academic screen time');
-          return 'nonAcademicScreenTime';
-        }
-        if (!formData.primaryDevice) {
-          setError('Please select your primary device');
-          return 'primaryDevice';
-        }
-        return null;
+  const scrollTop = () => topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  const validate = (p: number): string | null => {
+    switch (p) {
+      case 0: return null;
+      case 1: return null;
+      case 2: return null;
       case 3:
-        if (!formData.eyeStrainFrequency) {
-          setError('Please select eye strain frequency');
-          return 'eyeStrainFrequency';
-        }
-        if (!formData.headachesFrequency) {
-          setError('Please select headaches frequency');
-          return 'headachesFrequency';
-        }
-        if (!formData.blurryVisionFrequency) {
-          setError('Please select blurry vision frequency');
-          return 'blurryVisionFrequency';
-        }
-        if (!formData.dryEyesFrequency) {
-          setError('Please select dry eyes frequency');
-          return 'dryEyesFrequency';
-        }
+        if (!cvsq.cvsq_frequency) return 'Please select the frequency of your complaints (Q4).';
+        if (!cvsq.cvsq_screen_associated) return 'Please answer whether your complaints are screen-associated (Q5).';
         return null;
       case 4:
-        if (!formData.exerciseFrequency) {
-          setError('Please select your exercise frequency');
-          return 'exerciseFrequency';
-        }
-        if (!formData.outdoorTime) {
-          setError('Please select your outdoor time');
-          return 'outdoorTime';
-        }
-        if (!formData.blueLight) {
-          setError('Please select your blue light filter usage');
-          return 'blueLight';
-        }
+        if (!survey.age) return 'Please select your age range.';
+        if (!survey.gender) return 'Please select your gender.';
+        if (!survey.yearLevel) return 'Please select your year level.';
+        if (!survey.fieldOfStudy) return 'Please select your field of study.';
         return null;
       case 5:
-        if (!formData.screenHeight) {
-          setError('Please select your screen height position');
-          return 'screenHeight';
-        }
-        if (!formData.screenDistance) {
-          setError('Please select your screen distance');
-          return 'screenDistance';
-        }
-        if (!formData.roomLighting) {
-          setError('Please select your room lighting');
-          return 'roomLighting';
-        }
+        if (!survey.academicScreenTime) return 'Please select your academic screen time.';
+        if (!survey.nonAcademicScreenTime) return 'Please select your non-academic screen time.';
+        if (!survey.primaryDevice) return 'Please select your primary device.';
+        if (!survey.continuousScreenUse) return 'Please select your typical continuous screen use duration.';
+        if (!survey.onlineClassesPerDay) return 'Please select how many online classes you attend per day.';
         return null;
       case 6:
-        if (!formData.sleepHours) {
-          setError('Please enter your sleep hours');
-          return 'sleepHours';
-        }
-        if (parseFloat(formData.sleepHours) < 0 || parseFloat(formData.sleepHours) > 24) {
-          setError('Please enter sleep hours between 0 and 24');
-          return 'sleepHours';
-        }
-        if (!formData.screenBrightness) {
-          setError('Please select your screen brightness');
-          return 'screenBrightness';
-        }
+        if (!survey.follows202020) return 'Please answer Q10 (20-20-20 rule).';
+        if (!survey.blueLightFilter) return 'Please answer Q11 (blue light filter / night mode).';
+        if (!survey.screenBrightness) return 'Please select your screen brightness.';
+        if (!survey.darkRoomUse) return 'Please answer Q13 (dark room use).';
+        if (!survey.screenDistance) return 'Please select your screen distance.';
+        if (!survey.wearsGlasses) return 'Please answer Q15 (eyeglasses / contact lenses).';
+        if (!survey.blueLightGlasses) return 'Please answer Q16 (blue-light blocking glasses).';
+        if (!survey.breakFrequency) return 'Please select your break frequency.';
+        if (!survey.sleepHours) return 'Please select your average sleep hours.';
         return null;
-      default:
+      case 7: {
+        const missing = SYMPTOM_GRID_ITEMS.find((s) => !survey[s.key as keyof SurveyData]);
+        if (missing) return `Please answer the symptom: "${missing.label}".`;
         return null;
-    }
-  };
-
-  const scrollToField = (fieldId: string) => {
-    const el = fieldRefs.current[fieldId];
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // Focus the element if it can receive focus
-      if (typeof (el as HTMLElement).focus === 'function') {
-        (el as HTMLElement).focus({ preventScroll: true });
       }
-    } else if (errorBannerRef.current) {
-      errorBannerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      case 8:
+        if (!survey.overallEyeStrain) return 'Please rate your overall eye strain (Q20).';
+        if (!survey.digitalFatigueFrequency) return 'Please answer how often you feel digital fatigue (Q21).';
+        if (!survey.primarySymptomHistory) return 'Please answer Q22 about your primary symptom history.';
+        return null;
+      default: return null;
     }
   };
 
-  const handleNext = () => {
-    const invalidField = validateSection(currentSection);
-    if (invalidField === null) {
-      setCurrentSection(currentSection + 1);
-      setError('');
-    } else {
-      scrollToField(invalidField);
-    }
-  };
-
-  const handlePrevious = () => {
-    setCurrentSection(currentSection - 1);
+  const handleNext = async () => {
+    const err = validate(page);
+    if (err) { setError(err); scrollTop(); return; }
     setError('');
+    if (page === 4 && onProfileUpdate) {
+      try {
+        await onProfileUpdate({
+          firstName: survey.firstName, lastName: survey.lastName, age: survey.age,
+          gender: survey.gender, yearLevel: survey.yearLevel, fieldOfStudy: survey.fieldOfStudy,
+        });
+        setEditingProfile(false);
+      } catch { /* non-fatal */ }
+    }
+    setPage((p) => p + 1);
+    scrollTop();
   };
+
+  const handlePrev = () => { setError(''); setPage((p) => p - 1); scrollTop(); };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    const invalidField = validateSection(currentSection);
-    if (invalidField !== null) {
-      scrollToField(invalidField);
-      return;
-    }
-
-    setIsLoading(true);
-    setError('');
-
+    const err = validate(page);
+    if (err) { setError(err); scrollTop(); return; }
+    setIsLoading(true); setError('');
     try {
-      // Convert categorical data to numerical values for the ML model
-      const academicHours = {
-        'Less than 2 hours': 1,
-        '2–4 hours': 3,
-        '4–6 hours': 5,
-        '6–8 hours': 7,
-        'More than 8 hours': 10,
-      }[formData.academicScreenTime] || 0;
-
-      const nonAcademicHours = {
-        'Less than 1 hour': 0.5,
-        '1–3 hours': 2,
-        '3–5 hours': 4,
-        '5–7 hours': 6,
-        'More than 7 hours': 8,
-      }[formData.nonAcademicScreenTime] || 0;
-
-      const totalScreenTime = academicHours + nonAcademicHours;
-
-      // Map symptom frequencies to 0-4 scale
-      const frequencyMap = {
-        'Never': 0,
-        'Rarely (1-2 times a week)': 1,
-        'Sometimes (3-4 times a week)': 2,
-        'Often (5-6 times a week)': 3,
-        'Always (every day)': 4,
-      };
-
-      const symptoms = [
-        frequencyMap[formData.eyeStrainFrequency as keyof typeof frequencyMap] > 0 ? 'eyeStrain' : '',
-        frequencyMap[formData.headachesFrequency as keyof typeof frequencyMap] > 0 ? 'headaches' : '',
-        frequencyMap[formData.blurryVisionFrequency as keyof typeof frequencyMap] > 0 ? 'blurryVision' : '',
-        frequencyMap[formData.dryEyesFrequency as keyof typeof frequencyMap] > 0 ? 'dryEyes' : '',
-      ].filter(Boolean);
-
-      const submitData = {
-        screenTime: totalScreenTime,
-        breaksTaken: 0,
-        symptoms,
-        brightness: parseInt(formData.screenBrightness) || 75,
-        sleepHours: parseFloat(formData.sleepHours) || 0,
-        notes: formData.additionalNotes,
-        // Pass all profile and screen time data
-        age: formData.age,
-        gender: formData.gender,
-        yearLevel: formData.yearLevel,
-        fieldOfStudy: formData.fieldOfStudy,
-        academicScreenTime: formData.academicScreenTime,
-        nonAcademicScreenTime: formData.nonAcademicScreenTime,
-        primaryDevice: formData.primaryDevice,
-        eyeStrainFrequency: formData.eyeStrainFrequency,
-        headachesFrequency: formData.headachesFrequency,
-        blurryVisionFrequency: formData.blurryVisionFrequency,
-        dryEyesFrequency: formData.dryEyesFrequency,
-        exerciseFrequency: formData.exerciseFrequency,
-        outdoorTime: formData.outdoorTime,
-        blueLight: formData.blueLight,
-        screenHeight: formData.screenHeight,
-        screenDistance: formData.screenDistance,
-        roomLighting: formData.roomLighting,
-      };
-      
-      await onSubmit(submitData);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to submit form';
-      setError(message);
+      await onSubmit({ ...cvsq, ...survey });
+    } catch (ex) {
+      setError(ex instanceof Error ? ex.message : 'Failed to submit. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const isCvsqPage = page <= 3;
+  const progressPct = Math.round((page / (TOTAL_PAGES - 1)) * 100);
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div ref={topRef} />
+
+      {/* Progress bar */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{isCvsqPage ? 'Part 1 — CVS-Smart Questionnaire' : 'Part 2 — EyeGuard Survey'}</span>
+          <span>{progressPct}% complete</span>
+        </div>
+        <div className="h-2 bg-muted rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all duration-300 bg-[#f97316]" style={{ width: `${progressPct}%` }} />
+        </div>
+        <div className="flex gap-1">
+          {Array.from({ length: TOTAL_PAGES }).map((_, i) => (
+            <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i < page ? 'bg-[#f97316]/70' : i === page ? 'bg-[#f97316]' : 'bg-muted'}`} />
+          ))}
+        </div>
+      </div>
+
+      {/* Error banner */}
       {error && (
-        <div
-          ref={errorBannerRef}
-          className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex gap-3"
-        >
-          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-          <p>{error}</p>
+        <div ref={errorRef} className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-destructive">{error}</p>
         </div>
       )}
 
-      {/* Section 1: Student Profile */}
-      {currentSection === 1 && (
-        <FormSection>
-          <SectionHeader number={1} title="STUDENT PROFILE" />
-
-          <FormField label="Age" required fieldId="age">
-            <select
-              id="age"
-              ref={(el) => { fieldRefs.current['age'] = el; }}
-              value={formData.age || ''}
-              onChange={(e) => handleInputChange('age', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
-              required
-            >
-              <option value="">Select your age range</option>
-              {AGE_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          </FormField>
-
-          <FormField label="Gender" required fieldId="gender">
-            <select
-              id="gender"
-              ref={(el) => { fieldRefs.current['gender'] = el; }}
-              value={formData.gender || ''}
-              onChange={(e) => handleInputChange('gender', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
-              required
-            >
-              <option value="">Select your gender</option>
-              {GENDER_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          </FormField>
-
-          <FormField label="Year Level" required fieldId="yearLevel">
-            <select
-              id="yearLevel"
-              ref={(el) => { fieldRefs.current['yearLevel'] = el; }}
-              value={formData.yearLevel || ''}
-              onChange={(e) => handleInputChange('yearLevel', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
-              required
-            >
-              <option value="">Select your year level</option>
-              {YEAR_LEVEL_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          </FormField>
-
-          <FormField label="Field of Study" required fieldId="fieldOfStudy">
-            <select
-              id="fieldOfStudy"
-              ref={(el) => { fieldRefs.current['fieldOfStudy'] = el; }}
-              value={formData.fieldOfStudy || ''}
-              onChange={(e) => handleInputChange('fieldOfStudy', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
-              required
-            >
-              <option value="">Select your field of study</option>
-              {FIELD_OF_STUDY_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          </FormField>
-        </FormSection>
-      )}
-
-      {/* Section 2: Daily Screen Time */}
-      {currentSection === 2 && (
-        <FormSection>
-          <SectionHeader number={2} title="DAILY SCREEN TIME" />
-
-          <FormField label="Average daily screen time for academic purposes" required fieldId="academicScreenTime">
-            <div
-              id="academicScreenTime"
-              ref={(el) => { fieldRefs.current['academicScreenTime'] = el; }}
-              className="space-y-2"
-            >
-              {ACADEMIC_SCREEN_TIME_OPTIONS.map((option) => (
-                <label
-                  key={option}
-                  className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted transition-colors cursor-pointer"
-                >
-                  <input
-                    type="radio"
-                    name="academic-screen-time"
-                    value={option}
-                    checked={formData.academicScreenTime === option}
-                    onChange={(e) => handleInputChange('academicScreenTime', e.target.value)}
-                    className="w-4 h-4 accent-primary"
-                  />
-                  <span className="text-sm text-foreground">{option}</span>
-                </label>
-              ))}
-            </div>
-          </FormField>
-
-          <FormField label="Average daily screen time for non-academic purposes (social media, gaming, entertainment)" required fieldId="nonAcademicScreenTime">
-            <div
-              id="nonAcademicScreenTime"
-              ref={(el) => { fieldRefs.current['nonAcademicScreenTime'] = el; }}
-              className="space-y-2"
-            >
-              {NON_ACADEMIC_SCREEN_TIME_OPTIONS.map((option) => (
-                <label
-                  key={option}
-                  className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted transition-colors cursor-pointer"
-                >
-                  <input
-                    type="radio"
-                    name="non-academic-screen-time"
-                    value={option}
-                    checked={formData.nonAcademicScreenTime === option}
-                    onChange={(e) => handleInputChange('nonAcademicScreenTime', e.target.value)}
-                    className="w-4 h-4 accent-primary"
-                  />
-                  <span className="text-sm text-foreground">{option}</span>
-                </label>
-              ))}
-            </div>
-          </FormField>
-
-          <FormField label="Which device do you use the most for screen activities?" required fieldId="primaryDevice">
-            <div
-              id="primaryDevice"
-              ref={(el) => { fieldRefs.current['primaryDevice'] = el; }}
-              className="space-y-2"
-            >
-              {PRIMARY_DEVICE_OPTIONS.map((option) => (
-                <label
-                  key={option}
-                  className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted transition-colors cursor-pointer"
-                >
-                  <input
-                    type="radio"
-                    name="primary-device"
-                    value={option}
-                    checked={formData.primaryDevice === option}
-                    onChange={(e) => handleInputChange('primaryDevice', e.target.value)}
-                    className="w-4 h-4 accent-primary"
-                  />
-                  <span className="text-sm text-foreground">{option}</span>
-                </label>
-              ))}
-            </div>
-          </FormField>
-        </FormSection>
-      )}
-
-      {/* Section 3: Eye Strain & Symptoms */}
-      {currentSection === 3 && (
-        <FormSection>
-          <SectionHeader number={3} title="EYE STRAIN & SYMPTOMS" />
-
-          <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg border border-blue-200 dark:border-blue-800 mb-6">
-            <p className="text-sm text-foreground">
-              Please rate the frequency of the following symptoms you experience during or after screen use:
-            </p>
+      {/* ── PAGE 0 — CVSQ Q1 Visual ──────────────────────────────────────────── */}
+      {page === 0 && (
+        <div className="space-y-6">
+          <PartBanner part="Part 1 of 2 — CVS-Smart Questionnaire" title="Visual Complaints" subtitle="Section 1 of 5 · Part 1" />
+          <div className="rounded-lg bg-[#f97316]/8 dark:bg-[#f97316]/10 border border-[#f97316]/25 p-4">
+            <p className="text-base font-semibold text-foreground">Q1. Out of the following visual complaints, how many do you suffer from?</p>
+            <p className="text-xs text-muted-foreground mt-1">Select all that apply. It is okay to select none.</p>
           </div>
-
-          <FormField label="Eye Strain" required fieldId="eyeStrainFrequency">
-            <select
-              id="eyeStrainFrequency"
-              ref={(el) => { fieldRefs.current['eyeStrainFrequency'] = el; }}
-              value={formData.eyeStrainFrequency}
-              onChange={(e) => handleInputChange('eyeStrainFrequency', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
-              required
-            >
-              <option value="">Select frequency</option>
-              {FREQUENCY_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          </FormField>
-
-          <FormField label="Headaches" required fieldId="headachesFrequency">
-            <select
-              id="headachesFrequency"
-              ref={(el) => { fieldRefs.current['headachesFrequency'] = el; }}
-              value={formData.headachesFrequency}
-              onChange={(e) => handleInputChange('headachesFrequency', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
-              required
-            >
-              <option value="">Select frequency</option>
-              {FREQUENCY_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          </FormField>
-
-          <FormField label="Blurry Vision" required fieldId="blurryVisionFrequency">
-            <select
-              id="blurryVisionFrequency"
-              ref={(el) => { fieldRefs.current['blurryVisionFrequency'] = el; }}
-              value={formData.blurryVisionFrequency}
-              onChange={(e) => handleInputChange('blurryVisionFrequency', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
-              required
-            >
-              <option value="">Select frequency</option>
-              {FREQUENCY_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          </FormField>
-
-          <FormField label="Dry Eyes" required fieldId="dryEyesFrequency">
-            <select
-              id="dryEyesFrequency"
-              ref={(el) => { fieldRefs.current['dryEyesFrequency'] = el; }}
-              value={formData.dryEyesFrequency}
-              onChange={(e) => handleInputChange('dryEyesFrequency', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
-              required
-            >
-              <option value="">Select frequency</option>
-              {FREQUENCY_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          </FormField>
-        </FormSection>
+          <CheckboxGroup items={VISUAL_COMPLAINTS} selected={cvsq.cvsq_visual} onChange={(v) => { setCvsq((c) => ({ ...c, cvsq_visual: v })); setError(''); }} />
+          <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+            Score: {cvsq.cvsq_visual.length === 0 ? '0 complaints → 0 pts' : cvsq.cvsq_visual.length === 1 ? '1 complaint → 1 pt' : `${cvsq.cvsq_visual.length} complaints → 2 pts`}
+          </div>
+        </div>
       )}
 
-      {/* Section 4: Lifestyle & Habits */}
-      {currentSection === 4 && (
-        <FormSection>
-          <SectionHeader number={4} title="LIFESTYLE & HABITS" />
-
-          <FormField label="How often do you exercise or engage in physical activity?" required fieldId="exerciseFrequency">
-            <select
-              id="exerciseFrequency"
-              ref={(el) => { fieldRefs.current['exerciseFrequency'] = el; }}
-              value={formData.exerciseFrequency}
-              onChange={(e) => handleInputChange('exerciseFrequency', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
-              required
-            >
-              <option value="">Select frequency</option>
-              {EXERCISE_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          </FormField>
-
-          <FormField label="How much time do you spend outdoors daily?" required fieldId="outdoorTime">
-            <select
-              id="outdoorTime"
-              ref={(el) => { fieldRefs.current['outdoorTime'] = el; }}
-              value={formData.outdoorTime}
-              onChange={(e) => handleInputChange('outdoorTime', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
-              required
-            >
-              <option value="">Select duration</option>
-              {OUTDOOR_TIME_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          </FormField>
-
-          <FormField label="Do you use blue light filters or night mode on your devices?" required fieldId="blueLight">
-            <select
-              id="blueLight"
-              ref={(el) => { fieldRefs.current['blueLight'] = el; }}
-              value={formData.blueLight}
-              onChange={(e) => handleInputChange('blueLight', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
-              required
-            >
-              <option value="">Select option</option>
-              {BLUE_LIGHT_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          </FormField>
-        </FormSection>
+      {/* ── PAGE 1 — CVSQ Q2 Ocular ──────────────────────────────────────────── */}
+      {page === 1 && (
+        <div className="space-y-6">
+          <PartBanner part="Part 1 of 2 — CVS-Smart Questionnaire" title="Ocular Surface Complaints" subtitle="Section 2 of 5 · Part 1" />
+          <div className="rounded-lg bg-[#f97316]/8 dark:bg-[#f97316]/10 border border-[#f97316]/25 p-4">
+            <p className="text-base font-semibold text-foreground">Q2. Out of the following ocular surface complaints, how many do you suffer from?</p>
+            <p className="text-xs text-muted-foreground mt-1">Select all that apply. It is okay to select none.</p>
+          </div>
+          <CheckboxGroup items={OCULAR_SURFACE_COMPLAINTS} selected={cvsq.cvsq_ocular} onChange={(v) => { setCvsq((c) => ({ ...c, cvsq_ocular: v })); setError(''); }} />
+          <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+            Score: {cvsq.cvsq_ocular.length === 0 ? '0 complaints → 0 pts' : cvsq.cvsq_ocular.length === 1 ? '1 complaint → 1 pt' : `${cvsq.cvsq_ocular.length} complaints → 2 pts`}
+          </div>
+        </div>
       )}
 
-      {/* Section 5: Environment & Settings */}
-      {currentSection === 5 && (
-        <FormSection>
-          <SectionHeader number={5} title="ENVIRONMENT & SETTINGS" />
-
-          <FormField label="How is your screen positioned relative to your eyes?" required fieldId="screenHeight">
-            <select
-              id="screenHeight"
-              ref={(el) => { fieldRefs.current['screenHeight'] = el; }}
-              value={formData.screenHeight}
-              onChange={(e) => handleInputChange('screenHeight', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
-              required
-            >
-              <option value="">Select position</option>
-              {SCREEN_HEIGHT_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          </FormField>
-
-          <FormField label="What is your typical screen viewing distance?" required fieldId="screenDistance">
-            <select
-              id="screenDistance"
-              ref={(el) => { fieldRefs.current['screenDistance'] = el; }}
-              value={formData.screenDistance}
-              onChange={(e) => handleInputChange('screenDistance', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
-              required
-            >
-              <option value="">Select distance</option>
-              {SCREEN_DISTANCE_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          </FormField>
-
-          <FormField label="What is the lighting condition of your room?" required fieldId="roomLighting">
-            <select
-              id="roomLighting"
-              ref={(el) => { fieldRefs.current['roomLighting'] = el; }}
-              value={formData.roomLighting}
-              onChange={(e) => handleInputChange('roomLighting', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
-              required
-            >
-              <option value="">Select lighting</option>
-              {ROOM_LIGHTING_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          </FormField>
-        </FormSection>
+      {/* ── PAGE 2 — CVSQ Q3 Extraocular ─────────────────────────────────────── */}
+      {page === 2 && (
+        <div className="space-y-6">
+          <PartBanner part="Part 1 of 2 — CVS-Smart Questionnaire" title="Extraocular Complaints" subtitle="Section 3 of 5 · Part 1" />
+          <div className="rounded-lg bg-[#f97316]/8 dark:bg-[#f97316]/10 border border-[#f97316]/25 p-4">
+            <p className="text-base font-semibold text-foreground">Q3. Out of the following extraocular complaints, how many do you suffer from?</p>
+            <p className="text-xs text-muted-foreground mt-1">Select all that apply. It is okay to select none.</p>
+          </div>
+          <CheckboxGroup items={EXTRAOCULAR_COMPLAINTS} selected={cvsq.cvsq_extraocular} onChange={(v) => { setCvsq((c) => ({ ...c, cvsq_extraocular: v })); setError(''); }} />
+          <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+            Score: {cvsq.cvsq_extraocular.length === 0 ? '0 complaints → 0 pts' : cvsq.cvsq_extraocular.length === 1 ? '1 complaint → 1 pt' : `${cvsq.cvsq_extraocular.length} complaints → 2 pts`}
+          </div>
+        </div>
       )}
 
-      {/* Section 6: Additional Information */}
-      {currentSection === 6 && (
-        <FormSection>
-          <SectionHeader number={6} title="ADDITIONAL INFORMATION" />
-
-          <FormField label="Average Sleep Hours per Night" required fieldId="sleepHours">
-            <input
-              id="sleepHours"
-              ref={(el) => { fieldRefs.current['sleepHours'] = el; }}
-              type="number"
-              inputMode="decimal"
-              step="0.5"
-              min="0"
-              max="24"
-              value={formData.sleepHours || ''}
-              onChange={(e) => {
-                handleInputChange('sleepHours', e.target.value);
-              }}
-              placeholder="e.g., 7.5"
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              required
-              autoComplete="off"
-            />
+      {/* ── PAGE 3 — CVSQ Q4 + Q5 ────────────────────────────────────────────── */}
+      {page === 3 && (
+        <div className="space-y-6">
+          <PartBanner part="Part 1 of 2 — CVS-Smart Questionnaire" title="Frequency & Screen Association" subtitle="Section 4 of 5 · Part 1" />
+          <FormField label="Q4. How do you describe the frequency of your complaints?" required fieldId="cvsq_frequency">
+            <RadioGroup name="cvsq_frequency" options={CVSQ_FREQUENCY_OPTIONS} value={cvsq.cvsq_frequency}
+              onChange={(v) => { setCvsq((c) => ({ ...c, cvsq_frequency: v })); setError(''); }}
+              fieldId="cvsq_frequency"
+              definitionKeys={{ Rare: 'Rare', Infrequent: 'Infrequent', Frequent: 'Frequent' }} />
+            <div className="mt-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">Rare = 0 pts · Infrequent = 1 pt · Frequent = 2 pts</div>
           </FormField>
-
-          <FormField label="Screen Brightness Level" required fieldId="screenBrightness">
-            <div className="space-y-4">
-              <input
-                id="screenBrightness"
-                ref={(el) => { fieldRefs.current['screenBrightness'] = el; }}
-                type="range"
-                min="0"
-                max="100"
-                value={formData.screenBrightness}
-                onChange={(e) => handleInputChange('screenBrightness', e.target.value)}
-                className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
-              />
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground">0%</span>
-                <span className="text-sm font-medium text-foreground">{formData.screenBrightness}%</span>
-                <span className="text-xs text-muted-foreground">100%</span>
+          <FormField label="Q5. Are your complaints associated with the time of screen use?" hint="i.e. do your complaints exist during or shortly after screen use?" required fieldId="cvsq_screen_associated">
+            <RadioGroup name="cvsq_screen_associated" options={CVSQ_SCREEN_ASSOC_OPTIONS} value={cvsq.cvsq_screen_associated}
+              onChange={(v) => { setCvsq((c) => ({ ...c, cvsq_screen_associated: v })); setError(''); }}
+              fieldId="cvsq_screen_associated"
+              definitionKeys={{ Never: 'Never (screen)', Sometimes: 'Sometimes (screen)', Always: 'Always (screen)' }} />
+            <div className="mt-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">Never = 0 pts · Sometimes = 1 pt · Always = 2 pts</div>
+          </FormField>
+          {/* CVSQ preview */}
+          {cvsq.cvsq_frequency && cvsq.cvsq_screen_associated && (() => {
+            const q1 = Math.min(cvsq.cvsq_visual.length, 2);
+            const q2 = Math.min(cvsq.cvsq_ocular.length, 2);
+            const q3 = Math.min(cvsq.cvsq_extraocular.length, 2);
+            const q4 = ({ Rare: 0, Infrequent: 1, Frequent: 2 } as Record<string,number>)[cvsq.cvsq_frequency] ?? 0;
+            const q5 = ({ Never: 0, Sometimes: 1, Always: 2 } as Record<string,number>)[cvsq.cvsq_screen_associated] ?? 0;
+            const total = q1 + q2 + q3 + q4 + q5;
+            const status = total >= 7 ? 'Positive CVS Case' : total >= 5 ? 'High Probability' : total >= 3 ? 'Low Probability' : total >= 1 ? 'Not a CVS Case' : 'Normal';
+            const color = total >= 7 ? 'red' : total >= 5 ? 'orange' : total >= 3 ? 'yellow' : 'green';
+            return (
+              <div className={`rounded-xl border-2 p-4 ${color === 'red' ? 'bg-red-50 dark:bg-red-950/20 border-red-300' : color === 'orange' ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-300' : color === 'yellow' ? 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-300' : 'bg-green-50 dark:bg-green-950/20 border-green-300'}`}>
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1">CVS-Smart Preview</p>
+                <p className={`text-2xl font-bold ${color === 'red' ? 'text-red-600' : color === 'orange' ? 'text-orange-600' : color === 'yellow' ? 'text-yellow-600' : 'text-green-600'}`}>{total} / 10</p>
+                <p className="text-sm font-semibold text-foreground mt-0.5">{status}</p>
+                <p className="text-xs text-muted-foreground mt-1">Q1: {q1} · Q2: {q2} · Q3: {q3} · Q4: {q4} · Q5: {q5}</p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                {parseInt(formData.screenBrightness) <= 30 && 'Very low brightness'}
-                {parseInt(formData.screenBrightness) > 30 && parseInt(formData.screenBrightness) <= 60 && 'Low to medium brightness'}
-                {parseInt(formData.screenBrightness) > 60 && parseInt(formData.screenBrightness) <= 80 && 'Medium to high brightness'}
-                {parseInt(formData.screenBrightness) > 80 && 'Very high brightness'}
-              </p>
-            </div>
-          </FormField>
-
-          <FormField label="Additional Notes or Comments" fieldId="additionalNotes">
-            <textarea
-              value={formData.additionalNotes || ''}
-              onChange={(e) => {
-                handleInputChange('additionalNotes', e.target.value);
-              }}
-              placeholder="Any additional information about your eye health, work environment, or daily habits that might be relevant..."
-              rows={5}
-              className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              autoComplete="off"
-            />
-          </FormField>
-        </FormSection>
+            );
+          })()}
+        </div>
       )}
 
-      {/* Navigation Buttons */}
-      <div className="flex gap-3 pt-6">
-        {currentSection > 1 && (
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            onClick={handlePrevious}
-            className="flex-1"
-          >
+      {/* ── PAGE 4 — Student Profile ──────────────────────────────────────────── */}
+      {page === 4 && (
+        <div className="space-y-6">
+          <PartBanner part="Part 2 of 2 — EyeGuard Survey" title="Student Profile" subtitle="Section 1 of 5 · Tell us about yourself" />
+          {/* Summary mode when profile is already saved */}
+          {profileComplete && !editingProfile ? (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-[#f97316]/8 border border-[#f97316]/20 px-4 py-3 flex items-start gap-3">
+                <User className="w-4 h-4 text-[#f97316] flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-foreground">Your profile is saved. It will be used for this submission automatically.</p>
+              </div>
+              <div className="rounded-xl border border-border bg-muted/20 divide-y divide-border overflow-hidden">
+                {[
+                  { label: 'First Name', value: survey.firstName }, { label: 'Last Name', value: survey.lastName },
+                  { label: 'Email', value: email || '—' }, { label: 'Age range', value: survey.age },
+                  { label: 'Gender', value: survey.gender }, { label: 'Year level', value: survey.yearLevel },
+                  { label: 'Field of study', value: survey.fieldOfStudy },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex items-center justify-between px-4 py-3">
+                    <span className="text-xs text-muted-foreground w-32 flex-shrink-0">{label}</span>
+                    <span className="text-sm font-medium text-foreground text-right flex-1">{value || '—'}</span>
+                  </div>
+                ))}
+              </div>
+              <button type="button" onClick={() => setEditingProfile(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#f97316]/30 text-[#f97316] text-sm font-medium hover:bg-[#f97316]/8 transition-colors">
+                <Pencil className="w-4 h-4" />Edit Profile
+              </button>
+            </div>
+          ) : (
+            /* Edit mode */
+            <div className="space-y-6">
+              {editingProfile && (
+                <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-4 py-3 flex items-center justify-between gap-3">
+                  <p className="text-sm text-amber-700 dark:text-amber-400">Editing your profile. Changes will be saved when you tap Next.</p>
+                  <button type="button" onClick={() => setEditingProfile(false)} className="text-xs text-muted-foreground hover:text-foreground underline flex-shrink-0">Cancel</button>
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField label="First Name" fieldId="firstName">
+                  <input id="firstName" type="text" value={survey.firstName} onChange={(e) => setSurveyField('firstName', e.target.value)} placeholder="e.g. Juan"
+                    className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary" />
+                </FormField>
+                <FormField label="Last Name" fieldId="lastName">
+                  <input id="lastName" type="text" value={survey.lastName} onChange={(e) => setSurveyField('lastName', e.target.value)} placeholder="e.g. Dela Cruz"
+                    className="w-full px-4 py-2 rounded-lg border border-border bg-white dark:bg-[#1a1008] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary" />
+                </FormField>
+              </div>
+              <FormField label="Email Address" fieldId="email-display">
+                <input id="email-display" type="email" value={email || ''} disabled className="w-full px-4 py-2 rounded-lg border border-border bg-muted text-muted-foreground cursor-not-allowed" />
+                <p className="text-xs text-muted-foreground mt-1">Email cannot be changed here</p>
+              </FormField>
+              <FormField label="Q1. What is your age range?" required fieldId="age">
+                <RadioGroup name="age" options={AGE_OPTIONS} value={survey.age} onChange={(v) => setSurveyField('age', v)} fieldId="age" />
+              </FormField>
+              <FormField label="Q2. What is your gender?" required fieldId="gender">
+                <RadioGroup name="gender" options={GENDER_OPTIONS} value={survey.gender} onChange={(v) => setSurveyField('gender', v)} fieldId="gender" />
+              </FormField>
+              <FormField label="Q3. What is your year level?" required fieldId="yearLevel">
+                <RadioGroup name="yearLevel" options={YEAR_LEVEL_OPTIONS} value={survey.yearLevel} onChange={(v) => setSurveyField('yearLevel', v)} fieldId="yearLevel" />
+              </FormField>
+              <FormField label="Q4. What is your field of study?" required fieldId="fieldOfStudy">
+                <SelectField id="fieldOfStudy" value={survey.fieldOfStudy} placeholder="Select your field of study" options={FIELD_OPTIONS} onChange={(v) => setSurveyField('fieldOfStudy', v)} />
+              </FormField>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── PAGE 5 — Screen Time ──────────────────────────────────────────────── */}
+      {page === 5 && (
+        <div className="space-y-6">
+          <PartBanner part="Part 2 of 2 — EyeGuard Survey" title="Screen Time & Device Use" subtitle="Section 2 of 5" />
+          <FormField label="Q5. Average daily screen time for academic purposes" required fieldId="academicScreenTime">
+            <RadioGroup name="academicScreenTime" options={ACAD_SCREEN_OPTIONS} value={survey.academicScreenTime} fieldId="academicScreenTime" onChange={(v) => setSurveyField('academicScreenTime', v)} />
+          </FormField>
+          <FormField label="Q6. Average daily screen time for non-academic purposes" hint="(social media, gaming, entertainment)" required fieldId="nonAcademicScreenTime">
+            <RadioGroup name="nonAcademicScreenTime" options={NON_ACAD_SCREEN_OPTIONS} value={survey.nonAcademicScreenTime} fieldId="nonAcademicScreenTime" onChange={(v) => setSurveyField('nonAcademicScreenTime', v)} />
+          </FormField>
+          <FormField label="Q7. Which device do you use the most for screen activities?" required fieldId="primaryDevice">
+            <RadioGroup name="primaryDevice" options={DEVICE_OPTIONS} value={survey.primaryDevice} fieldId="primaryDevice" onChange={(v) => setSurveyField('primaryDevice', v)} />
+          </FormField>
+          <FormField label="Q8. How long do you usually use a screen continuously without taking a break?" required fieldId="continuousScreenUse">
+            <RadioGroup name="continuousScreenUse" options={CONTINUOUS_USE_OPTIONS} value={survey.continuousScreenUse} fieldId="continuousScreenUse" onChange={(v) => setSurveyField('continuousScreenUse', v)} />
+          </FormField>
+          <FormField label="Q9. How many online classes or digital study sessions do you attend per day?" required fieldId="onlineClassesPerDay">
+            <RadioGroup name="onlineClassesPerDay" options={ONLINE_CLASSES_OPTIONS} value={survey.onlineClassesPerDay} fieldId="onlineClassesPerDay" onChange={(v) => setSurveyField('onlineClassesPerDay', v)} />
+          </FormField>
+        </div>
+      )}
+
+      {/* ── PAGE 6 — Screen Habits ────────────────────────────────────────────── */}
+      {page === 6 && (
+        <div className="space-y-6">
+          <PartBanner part="Part 2 of 2 — EyeGuard Survey" title="Screen Habits & Environment" subtitle="Section 3 of 5" />
+          <FormField label="Q10. Do you follow the 20-20-20 rule?" hint="(Look away every 20 minutes at something 20 feet away for 20 seconds)" required fieldId="follows202020">
+            <RadioGroup name="follows202020" options={YESNO_FREQ_OPTIONS} value={survey.follows202020} fieldId="follows202020" onChange={(v) => setSurveyField('follows202020', v)} />
+          </FormField>
+          <FormField label="Q11. Do you use blue light filters or night mode on your device?" required fieldId="blueLightFilter">
+            <RadioGroup name="blueLightFilter" options={YESNO_FREQ_OPTIONS} value={survey.blueLightFilter} fieldId="blueLightFilter" onChange={(v) => setSurveyField('blueLightFilter', v)} />
+          </FormField>
+          <FormField label="Q12. What screen brightness level do you usually use?" required fieldId="screenBrightness">
+            <RadioGroup name="screenBrightness" options={BRIGHTNESS_OPTIONS} value={survey.screenBrightness} fieldId="screenBrightness" onChange={(v) => setSurveyField('screenBrightness', v)} />
+          </FormField>
+          <FormField label="Q13. Do you often use your device in a dark environment?" required fieldId="darkRoomUse">
+            <RadioGroup name="darkRoomUse" options={YESNO_FREQ_OPTIONS} value={survey.darkRoomUse} fieldId="darkRoomUse" onChange={(v) => setSurveyField('darkRoomUse', v)} />
+          </FormField>
+          <FormField label="Q14. Approximate distance between your eyes and the screen" required fieldId="screenDistance">
+            <RadioGroup name="screenDistance" options={DISTANCE_OPTIONS} value={survey.screenDistance} fieldId="screenDistance" onChange={(v) => setSurveyField('screenDistance', v)} />
+          </FormField>
+          <FormField label="Q15. Do you wear eyeglasses or contact lenses while using digital devices?" required fieldId="wearsGlasses">
+            <RadioGroup name="wearsGlasses" options={['Yes', 'No']} value={survey.wearsGlasses} fieldId="wearsGlasses" onChange={(v) => setSurveyField('wearsGlasses', v)} />
+          </FormField>
+          <FormField label="Q16. Do you use blue-light blocking glasses?" required fieldId="blueLightGlasses">
+            <RadioGroup name="blueLightGlasses" options={YESNO_FREQ_OPTIONS} value={survey.blueLightGlasses} fieldId="blueLightGlasses" onChange={(v) => setSurveyField('blueLightGlasses', v)} />
+          </FormField>
+          <FormField label="Q17. How often do you take breaks during long screen sessions?" required fieldId="breakFrequency">
+            <RadioGroup name="breakFrequency" options={BREAK_FREQ_OPTIONS} value={survey.breakFrequency} fieldId="breakFrequency" onChange={(v) => setSurveyField('breakFrequency', v)} />
+          </FormField>
+          <FormField label="Q18. How many hours of sleep do you usually get per night?" required fieldId="sleepHours">
+            <RadioGroup name="sleepHours" options={SLEEP_OPTIONS.map(o => o.label)} value={SLEEP_OPTIONS.find(o => o.value === survey.sleepHours)?.label || ''}
+              fieldId="sleepHours"
+              onChange={(v) => { const opt = SLEEP_OPTIONS.find(o => o.label === v); if (opt) setSurveyField('sleepHours', opt.value); }} />
+          </FormField>
+        </div>
+      )}
+
+      {/* ── PAGE 7 — Symptom Grid ─────────────────────────────────────────────── */}
+      {page === 7 && (
+        <div className="space-y-6">
+          <PartBanner part="Part 2 of 2 — EyeGuard Survey" title="Eye Strain Symptoms" subtitle="Section 4 of 5 · Q19 — Rate each symptom in the past week" />
+          <div className="rounded-lg bg-primary/5 border border-primary/20 p-4">
+            <p className="text-sm text-primary/90 font-medium">Q19. In the past week, how often have you experienced the following symptoms while using digital devices?</p>
+            <p className="text-xs text-muted-foreground mt-1">Scale: Never · Rarely · Sometimes · Often · Always</p>
+          </div>
+          {/* Desktop grid */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="bg-muted/50">
+                  <th className="text-left p-3 font-medium text-foreground w-1/2">Symptom</th>
+                  {SYMPTOM_SCALE.map((s) => <th key={s} className="text-center p-3 font-medium text-foreground">{s}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {SYMPTOM_GRID_ITEMS.map((item, i) => (
+                  <tr key={item.key} className={`transition-colors ${survey[item.key as keyof SurveyData] ? 'bg-[#f97316]/8 dark:bg-[#f97316]/10' : i % 2 === 0 ? 'bg-white dark:bg-transparent' : 'bg-muted/20'}`}>
+                    <td className="p-3 text-foreground">
+                      <span className="flex items-center gap-1">{item.label}<InfoButton term={item.label} /></span>
+                    </td>
+                    {SYMPTOM_SCALE.map((scale) => {
+                      const isSelected = survey[item.key as keyof SurveyData] === scale;
+                      return (
+                        <td key={scale} className="text-center p-1">
+                          <label className="flex items-center justify-center w-full min-h-[44px] cursor-pointer">
+                            <input type="radio" name={item.key} value={scale} checked={isSelected} onChange={() => setSurveyField(item.key as keyof SurveyData, scale)} className="sr-only" />
+                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors flex-shrink-0 ${isSelected ? 'border-[#f97316] bg-[#f97316]' : 'border-muted-foreground/40 bg-transparent hover:border-[#f97316]/50'}`}>
+                              {isSelected && <span className="w-2 h-2 rounded-full bg-white" />}
+                            </span>
+                          </label>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {/* Mobile stacked */}
+          <div className="sm:hidden space-y-4">
+            {SYMPTOM_GRID_ITEMS.map((item) => (
+              <div key={item.key} className="rounded-lg border border-border p-4 space-y-3">
+                <p className="text-sm font-medium text-foreground flex items-center gap-1">{item.label}<InfoButton term={item.label} /></p>
+                <div className="flex flex-wrap gap-2">
+                  {SYMPTOM_SCALE.map((scale) => (
+                    <label key={scale} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer text-sm transition-colors ${survey[item.key as keyof SurveyData] === scale ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border text-muted-foreground hover:bg-muted'}`}>
+                      <input type="radio" name={item.key} value={scale} checked={survey[item.key as keyof SurveyData] === scale} onChange={() => setSurveyField(item.key as keyof SurveyData, scale)} className="sr-only" />
+                      {scale}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── PAGE 8 — Self-Assessment ──────────────────────────────────────────── */}
+      {page === 8 && (
+        <div className="space-y-6">
+          <PartBanner part="Part 2 of 2 — EyeGuard Survey" title="Overall Self-Assessment" subtitle="Section 5 of 5 · Almost done!" />
+          <FormField label="Q20. How would you rate your overall eye strain after daily screen use?" required fieldId="overallEyeStrain">
+            <RadioGroup name="overallEyeStrain" options={OVERALL_STRAIN_OPTIONS} value={survey.overallEyeStrain} fieldId="overallEyeStrain" onChange={(v) => setSurveyField('overallEyeStrain', v)} />
+          </FormField>
+          <FormField label="Q21. How often do you feel digital fatigue after using screens?" required fieldId="digitalFatigueFrequency">
+            <RadioGroup name="digitalFatigueFrequency" options={DIGITAL_FATIGUE_OPTIONS} value={survey.digitalFatigueFrequency} fieldId="digitalFatigueFrequency" onChange={(v) => setSurveyField('digitalFatigueFrequency', v)} />
+          </FormField>
+          <FormField label="Q22. Have you previously noticed dry eyes or blurry vision as a primary/frequent symptom?" required fieldId="primarySymptomHistory">
+            <RadioGroup name="primarySymptomHistory" options={PRIMARY_SYMPTOM_OPTIONS} value={survey.primarySymptomHistory} fieldId="primarySymptomHistory" onChange={(v) => setSurveyField('primarySymptomHistory', v)} />
+          </FormField>
+        </div>
+      )}
+
+      {/* ── Navigation buttons ────────────────────────────────────────────────── */}
+      <div className="flex gap-3 pt-2">
+        {page > 0 && (
+          <button type="button" onClick={handlePrev}
+            className="flex-1 sm:flex-none px-6 py-3 border border-border text-foreground text-sm font-medium rounded-xl hover:bg-muted transition-colors">
             Previous
-          </Button>
+          </button>
         )}
-        {currentSection < 6 ? (
-          <Button
-            type="button"
-            variant="primary"
-            size="lg"
-            onClick={handleNext}
-            className="flex-1"
-          >
+        {page < TOTAL_PAGES - 1 ? (
+          <button type="button" onClick={handleNext}
+            className="flex-1 px-6 py-3 bg-[#f97316] text-white text-sm font-semibold rounded-xl hover:bg-[#fb923c] transition-colors">
             Next
-          </Button>
+          </button>
         ) : (
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            isLoading={isLoading}
-            className="flex-1"
-          >
-            {isLoading ? 'Analyzing...' : 'Submit Survey'}
-          </Button>
+          <button type="submit" disabled={isLoading}
+            className="flex-1 px-6 py-3 bg-[#f97316] text-white text-sm font-semibold rounded-xl hover:bg-[#fb923c] disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+            {isLoading ? 'Submitting…' : 'Submit Survey'}
+          </button>
         )}
       </div>
-
-      {/* Progress Indicator */}
-      <div className="flex gap-2 justify-center pt-4">
-        {[1, 2, 3, 4, 5, 6].map((section) => (
-          <button
-            key={section}
-            type="button"
-            onClick={() => {
-              if (section < currentSection || validateSection(currentSection) === null) {
-                setCurrentSection(section);
-              }
-            }}
-            className={`w-3 h-3 rounded-full transition-all ${
-              section === currentSection
-                ? 'bg-primary w-8'
-                : section < currentSection
-                  ? 'bg-primary'
-                  : 'bg-muted'
-            }`}
-            aria-label={`Go to section ${section}`}
-          />
-        ))}
-      </div>
-
-      <p className="text-xs text-muted-foreground text-center pt-4">
-        Estimated time: 3-5 minutes. Your responses are anonymous and used only for research purposes.
-      </p>
+      <p className="text-center text-xs text-muted-foreground">Page {page + 1} of {TOTAL_PAGES} · Your responses are used only for research purposes.</p>
     </form>
   );
 }

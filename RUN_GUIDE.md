@@ -21,18 +21,6 @@ git push origin main
 
 localhost:3000
 
-RETRAIN MODEL
-cd c:\Users\darkt\Videos\v0-eyestrain-main\backend
-venv\Scripts\activate
-python app.py
-
-
-
-commit and push
-git add .
-git commit -m "notification removed"
-git push
-
 
 
 How to Run the Project:
